@@ -1,0 +1,54 @@
+project: skills-to-pay-the-bills
+updated: 2026-02-11
+
+stats:
+  - "8 skill templates"
+  - "1 command template"
+
+legend:
+  quality: "Code/design quality audits"
+  process: "Workflow and process tools"
+  utility: "General-purpose utilities"
+  content: "Content and copywriting"
+
+tree:
+  - name: "skills/"
+    desc: "Skill templates (copy to .claude/skills/)"
+    children:
+      - name: "accessibility/"
+        desc: "WCAG 2.1/2.2 AA audits"
+        tag: quality
+      - name: "content/"
+        desc: "Microcopy and tone of voice"
+        tag: content
+      - name: "creative/"
+        desc: "Divergent exploration methodology"
+        tag: process
+      - name: "design-system/"
+        desc: "Design token consistency"
+        tag: quality
+      - name: "review/"
+        desc: "Code review checklists"
+        tag: quality
+      - name: "seo/"
+        desc: "SEO and Core Web Vitals"
+        tag: quality
+      - name: "session-end/"
+        desc: "Session handoff documentation"
+        tag: process
+      - name: "project-index/"
+        desc: "Visual project map"
+        tag: utility
+  - name: "commands/"
+    desc: "Command templates (copy to ~/.claude/commands/)"
+    children:
+      - name: "project-index.md"
+        desc: "Global command variant"
+        tag: utility
+  - name: "docs/"
+    desc: "Guides and documentation"
+    children:
+      - name: "CUSTOMIZATION.md"
+        desc: "How to adapt templates"
+      - name: "WRITING-SKILLS.md"
+        desc: "How to write your own"

@@ -30,7 +30,7 @@ Each template is a standalone `.md` file with `{{PLACEHOLDER}}` tokens you repla
 ### Option A: Interactive installer
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/skills-to-pay-the-bills.git
+git clone https://github.com/corradofrancolini/skills-to-pay-the-bills.git
 cd skills-to-pay-the-bills
 ./install.sh /path/to/your/project
 ```

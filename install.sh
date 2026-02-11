@@ -94,9 +94,9 @@ if [[ ${#SELECTED_SKILLS[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# -- project-index: ask about command variant --
+# -- project-index: skill has a command variant too --
 
-INSTALL_COMMAND=false
+INSTALL_PI_COMMAND=false
 for skill in "${SELECTED_SKILLS[@]}"; do
   if [[ "$skill" == "project-index" ]]; then
     echo ""
@@ -109,15 +109,55 @@ for skill in "${SELECTED_SKILLS[@]}"; do
     case "$pi_choice" in
       2)
         SELECTED_SKILLS=("${SELECTED_SKILLS[@]/project-index/}")
-        INSTALL_COMMAND=true
+        INSTALL_PI_COMMAND=true
         ;;
       3)
-        INSTALL_COMMAND=true
+        INSTALL_PI_COMMAND=true
         ;;
     esac
     break
   fi
 done
+
+# -- Global commands --
+
+AVAILABLE_COMMANDS=()
+COMMAND_DESCS=()
+
+for cmd_file in "$COMMANDS_DIR"/*.md; do
+  cmd_name="$(basename "$cmd_file" .md)"
+  # project-index handled separately above
+  [[ "$cmd_name" == "project-index" ]] && continue
+  first_line=$(head -1 "$cmd_file")
+  AVAILABLE_COMMANDS+=("$cmd_name")
+  COMMAND_DESCS+=("$first_line")
+done
+
+SELECTED_COMMANDS=()
+if [[ ${#AVAILABLE_COMMANDS[@]} -gt 0 ]]; then
+  echo ""
+  echo -e "${BOLD}Available global commands:${RESET}"
+  echo ""
+  for i in "${!AVAILABLE_COMMANDS[@]}"; do
+    printf "  ${CYAN}%d${RESET}) %-20s %s\n" "$((i + 1))" "${AVAILABLE_COMMANDS[$i]}" "${DIM}${COMMAND_DESCS[$i]}${RESET}"
+  done
+  echo ""
+  echo -e "Enter command numbers to install (comma-separated), ${CYAN}a${RESET} for all, or ${DIM}enter${RESET} to skip:"
+  read -r cmd_selection
+  if [[ "$cmd_selection" == "a" || "$cmd_selection" == "A" || "$cmd_selection" == "all" ]]; then
+    SELECTED_COMMANDS=("${AVAILABLE_COMMANDS[@]}")
+  elif [[ -n "$cmd_selection" ]]; then
+    IFS=',' read -ra nums <<< "$cmd_selection"
+    for num in "${nums[@]}"; do
+      num=$(echo "$num" | tr -d ' ')
+      if [[ "$num" =~ ^[0-9]+$ ]] && (( num >= 1 && num <= ${#AVAILABLE_COMMANDS[@]} )); then
+        SELECTED_COMMANDS+=("${AVAILABLE_COMMANDS[$((num - 1))]}")
+      else
+        echo "Skipping invalid selection: $num"
+      fi
+    done
+  fi
+fi
 
 # -- Install skills --
 
@@ -142,14 +182,22 @@ for skill in "${SELECTED_SKILLS[@]}"; do
   fi
 done
 
-# -- Install command (if requested) --
+# -- Install commands --
 
-if [[ "$INSTALL_COMMAND" == true ]]; then
-  cmd_dest="$HOME/.claude/commands"
+cmd_dest="$HOME/.claude/commands"
+
+if [[ "$INSTALL_PI_COMMAND" == true ]]; then
   mkdir -p "$cmd_dest"
   cp "$COMMANDS_DIR/project-index.md" "$cmd_dest/project-index.md"
   INSTALLED+=("command:project-index")
 fi
+
+for cmd in "${SELECTED_COMMANDS[@]}"; do
+  [[ -z "$cmd" ]] && continue
+  mkdir -p "$cmd_dest"
+  cp "$COMMANDS_DIR/$cmd.md" "$cmd_dest/$cmd.md"
+  INSTALLED+=("command:$cmd")
+done
 
 # -- Report --
 

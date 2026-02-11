@@ -1,17 +1,4 @@
----
-name: session-end
-description: Closes the session by updating handoff documentation for the next session
----
-
-# Session End
-
 The user is about to close the session. Update the handoff files so the next session can pick up seamlessly.
-
-## Configuration
-
-| Placeholder | Description | Example |
-|---|---|---|
-| `{{PROJECT_ROOT}}` | Absolute path to your project root | `/Users/you/Projects/MyApp` |
 
 ## Required Actions
 
@@ -45,7 +32,7 @@ If `SESSION_HANDOFF.md` does not exist in the project root, create it with this 
 
 ### 2. Update SESSION_HANDOFF.md
 
-Read `{{PROJECT_ROOT}}/SESSION_HANDOFF.md` and update it with:
+Read `SESSION_HANDOFF.md` and update it with:
 
 - **Last Updated:** current date and time
 - **Current State:** 3-line summary of what works / in progress / blocked

@@ -17,13 +17,12 @@ Each template is a standalone `.md` file with `{{PLACEHOLDER}}` tokens you repla
 | [project-index](skills/project-index/) | Utility | Generates a visual text-based map of the project |
 | [review](skills/review/) | Quality | Code review checklists for correctness, security, performance, a11y |
 | [seo](skills/seo/) | Quality | SEO and Core Web Vitals audits |
-| [session-end](skills/session-end/) | Process | Session handoff documentation for continuity between sessions |
-
 ### Commands (global)
 
 | Command | Description |
 |---------|-------------|
-| [project-index](commands/project-index.md) | Same as the skill, but installed globally for all projects |
+| [project-index](commands/project-index.md) | Generates a visual text-based map of the project |
+| [session-end](commands/session-end.md) | Session handoff documentation for continuity between sessions |
 
 ## Quick Start
 

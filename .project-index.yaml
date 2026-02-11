@@ -2,8 +2,8 @@ project: skills-to-pay-the-bills
 updated: 2026-02-11
 
 stats:
-  - "8 skill templates"
-  - "1 command template"
+  - "7 skill templates"
+  - "2 command templates"
 
 legend:
   quality: "Code/design quality audits"
@@ -33,9 +33,6 @@ tree:
       - name: "seo/"
         desc: "SEO and Core Web Vitals"
         tag: quality
-      - name: "session-end/"
-        desc: "Session handoff documentation"
-        tag: process
       - name: "project-index/"
         desc: "Visual project map"
         tag: utility
@@ -43,8 +40,11 @@ tree:
     desc: "Command templates (copy to ~/.claude/commands/)"
     children:
       - name: "project-index.md"
-        desc: "Global command variant"
+        desc: "Visual project map"
         tag: utility
+      - name: "session-end.md"
+        desc: "Session handoff documentation"
+        tag: process
   - name: "docs/"
     desc: "Guides and documentation"
     children:

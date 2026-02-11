@@ -50,7 +50,6 @@ Here are all placeholders used across the templates:
 
 | Placeholder | Used in | Description |
 |---|---|---|
-| `{{PROJECT_ROOT}}` | session-end | Absolute path to project root |
 | `{{TECH_STACK}}` | review | Full tech stack description |
 
 ### Design & UI
@@ -106,10 +105,10 @@ Set `{{TECH_STACK}}` and uncomment the stack-specific checklist sections relevan
 
 Set `{{TARGET_AUDIENCE}}` and `{{FRAMEWORK}}`. Fill in the Keyword Targets table with your SEO strategy. Add framework-specific optimizations in the `<!-- CUSTOMIZE -->` sections.
 
-### session-end
+### session-end (command)
 
-Set `{{PROJECT_ROOT}}`. Uncomment optional sections if your project uses session logs, changelogs, or creative direction docs.
+No placeholders. Installed globally in `~/.claude/commands/`. Uncomment optional sections if your project uses session logs, changelogs, or creative direction docs.
 
-### project-index
+### project-index (command)
 
 No placeholders. Works as-is. Optionally create a `.project-index.yaml` file in your project root to define a curated project map (see the skill for the YAML format spec).

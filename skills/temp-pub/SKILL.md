@@ -1,15 +1,17 @@
 ---
 name: temp-pub
 description: |
-  Crea un link pubblico temporaneo a partire da un file o cartella sul computer locale, da condividere
-  rapidamente con clienti o colleghi. Usa SEMPRE questa skill quando l'utente vuole "far vedere",
-  "passare", "mandare", "mostrare", o "condividere" qualcosa che ha sul proprio Mac/PC senza
-  inviarlo per email o caricarlo su Google Drive — anche se non menziona esplicitamente "tunnel",
-  "ngrok", o "URL pubblico". Casi d'uso tipici: condividere un HTML statico, una demo locale, un PDF,
-  uno screenshot, una cartella di asset, una build di sviluppo. Gestisce installazione e configurazione
-  automatica per chi non ha mai usato strumenti di tunneling. Creates a temporary public URL from a
-  local file or folder for quick sharing — use whenever the user wants to share, expose, show, or
-  send something from their local machine without uploading to cloud storage.
+  Create a temporary public URL from a local file or folder so the user can share it
+  quickly with clients or colleagues without going through email or cloud storage. USE
+  THIS SKILL whenever the user wants to share, expose, show, send, hand off, or pass
+  something they have on their own machine to an external person — even when they don't
+  explicitly say "tunnel", "ngrok", or "public URL". Triggers on colloquial requests in
+  any language: "voglio passare questo PDF a un cliente", "share this folder with someone
+  outside the network", "mandami un link per questo screenshot", "expose this build",
+  "fais voir ce HTML à quelqu'un", "manda este archivo a un cliente". Typical targets:
+  a static HTML, a local demo, a PDF, a screenshot, an asset folder, a development build.
+  Handles install and configuration end-to-end for users who have never touched a
+  tunneling tool. User-facing replies mirror the user's prompt language automatically.
 ---
 
 # temp-pub

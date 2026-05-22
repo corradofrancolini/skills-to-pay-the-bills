@@ -25,6 +25,22 @@ L'utente vuole "passare", "mandare", "far vedere", "mostrare", "condividere" qua
 Mac/PC a una persona esterna. Tipicamente: HTML statico, PDF, screenshot, demo locale, build,
 cartella di asset.
 
+## Scenari tipici
+
+Quattro situazioni reali in cui ti accorgi che ti serve questa skill. Sono ancore per il pattern
+matching: se l'utente descrive qualcosa di simile, è il momento di invocarla anche se non nomina
+mai "tunnel" o "link pubblico".
+
+- Stai chiudendo una call su Meet, il cliente dice "fammelo provare prima di staccare" e tu hai
+  la build che gira su `localhost:3000`. Non c'è tempo di fare un deploy preview.
+- Hai aperto un mockup HTML in Chrome per controllare il responsive, il PM ti scrive su Slack
+  "puoi mandarmelo che lo apro al volo?". Lo zip su Slack lo comprime malissimo, le risorse
+  interne si rompono.
+- Devi mandare un PDF di 80MB a un cliente che non è sul vostro Workspace. L'allegato mail
+  rimbalza, Drive richiederebbe di invitarlo come ospite e approvare i permessi.
+- Un fornitore esterno ti ha consegnato 38 PNG di esecutivo che devi girare al cliente finale.
+  WeTransfer chiede ancora email, lo zip sarebbe da 240MB.
+
 ## Quando NON usare
 
 - Invio via Gmail/email

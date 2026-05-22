@@ -1,83 +1,83 @@
 # Troubleshooting — temp-pub
 
-Errori comuni e fix. Quando li mostri all'utente, riformula nella sua lingua.
+Common errors and fixes. When showing them to the user, rephrase in their language.
 
-## cloudflared non parte / URL non leggibile
+## cloudflared doesn't start / URL not readable
 
-**Sintomo:** `launch-tunnel.sh` esce con "could not read the public URL from cloudflared".
+**Symptom:** `launch-tunnel.sh` exits with "could not read the public URL from cloudflared".
 
-**Diagnosi:**
-1. Leggi `/tmp/temp-pub/.tunnel.log` per il messaggio reale.
-2. Cause tipiche:
-   - **Rete bloccata**: il log dice "failed to connect" → controlla connessione internet
-     o firewall aziendale che blocca traffico verso Cloudflare (porta 7844 UDP per QUIC, 443).
-   - **Porta locale non raggiungibile**: il log dice "connection refused on 127.0.0.1:<port>"
-     → il python http.server non è partito; vedi sotto.
-   - **Versione vecchia di cloudflared**: aggiorna con `brew upgrade cloudflared`.
+**Diagnosis:**
+1. Read `/tmp/temp-pub/.tunnel.log` for the real message.
+2. Typical causes:
+   - **Network blocked**: the log says "failed to connect" → check internet, or a corporate
+     firewall blocking traffic to Cloudflare (UDP port 7844 for QUIC, TCP 443).
+   - **Local port unreachable**: the log says "connection refused on 127.0.0.1:<port>" → the
+     Python http.server didn't start; see below.
+   - **Stale cloudflared**: upgrade with `brew upgrade cloudflared`.
 
-## python http.server non parte
+## Python http.server doesn't start
 
-**Sintomo:** `/tmp/temp-pub/.http.log` mostra errore di binding o l'URL pubblico ritorna 502.
+**Symptom:** `/tmp/temp-pub/.http.log` shows a binding error, or the public URL returns 502.
 
-`launch-tunnel.sh` sceglie sempre una porta libera con `socket.bind(('127.0.0.1', 0))`,
-quindi è raro. Se succede, verifica python3:
+`launch-tunnel.sh` always picks a free port via `socket.bind(('127.0.0.1', 0))`, so this is
+rare. If it happens, check python3:
 ```bash
 python3 --version
 ```
-Su macOS python3 è di default presente; se manca, `brew install python3`.
+On macOS python3 is present by default; if missing, `brew install python3`.
 
-## URL non risponde dall'esterno
+## URL doesn't respond from outside
 
-1. Verifica che entrambi i processi siano vivi:
+1. Confirm both processes are alive:
    ```bash
    cat /tmp/temp-pub/.tunnel.pid /tmp/temp-pub/.http.pid
    ps -p $(cat /tmp/temp-pub/.tunnel.pid) -p $(cat /tmp/temp-pub/.http.pid)
    ```
-2. Verifica internet (`ping -c 1 cloudflare.com`).
-3. Verifica che il server locale risponda:
+2. Check internet (`ping -c 1 cloudflare.com`).
+3. Check that the local server responds:
    ```bash
    port=$(grep -oE 'http://127\.0\.0\.1:[0-9]+' /tmp/temp-pub/.tunnel.log | head -1 | grep -oE '[0-9]+$')
    curl -I "http://127.0.0.1:$port"
    ```
-   Se il locale risponde ma il pubblico no, propagazione del tunnel lenta: rilancia.
+   If local responds but public doesn't, tunnel propagation is slow: relaunch.
 
-## cloudflared non trovato dopo `brew install`
+## cloudflared not found after `brew install`
 
-Dopo `brew install cloudflared`, il binario va in `/opt/homebrew/bin` (Apple Silicon) o
-`/usr/local/bin` (Intel). Se `command -v cloudflared` non lo trova:
-- Controlla che `$PATH` includa la directory corretta
-- Apri una nuova shell, o `eval "$(/opt/homebrew/bin/brew shellenv)"` per Apple Silicon
+After `brew install cloudflared`, the binary lands in `/opt/homebrew/bin` (Apple Silicon) or
+`/usr/local/bin` (Intel). If `command -v cloudflared` doesn't find it:
+- Check that `$PATH` includes the right directory
+- Open a fresh shell, or run `eval "$(/opt/homebrew/bin/brew shellenv)"` on Apple Silicon
 
-## Linux: come installare cloudflared senza brew
+## Linux: installing cloudflared without brew
 
-Cloudflare distribuisce binari diretti per ogni architettura. Esempio amd64:
+Cloudflare distributes per-architecture binaries directly. Example for amd64:
 ```bash
 sudo curl -L --output /usr/local/bin/cloudflared \
   https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 sudo chmod +x /usr/local/bin/cloudflared
 cloudflared --version
 ```
-Per arm64 / 386 / armhf sostituisci il suffisso. Lista completa:
+For arm64 / 386 / armhf, swap the suffix. Full list:
 https://github.com/cloudflare/cloudflared/releases/latest
 
-## Tunnel troppo lento
+## Tunnel too slow
 
-Cloudflare Quick Tunnels girano sui POP più vicini. Se i destinatari sono lontani può
-esserci latenza extra. Per file molto grandi considera Drive/Dropbox. Per scegliere la
-region (opzione a pagamento di ngrok), vedi `ngrok-alternative.md`.
+Cloudflare Quick Tunnels run on the POPs closest to whoever accesses the URL. If the
+recipients are far away there can be added latency. For very large files consider
+Drive/Dropbox. To choose the region (a paid ngrok feature), see `ngrok-alternative.md`.
 
-## Pagina di Cloudflare invece del file
+## Cloudflare error page instead of the file
 
-Capita rarissimamente se il tunnel ha problemi. Rilancia con `launch-tunnel.sh`.
+Happens rarely if the tunnel has issues. Relaunch with `launch-tunnel.sh`.
 
-## Tunnel cade da solo
+## Tunnel drops on its own
 
-Cloudflare Quick Tunnels non hanno una scadenza esplicita, ma se cloudflared perde
-connettività per qualche minuto il tunnel cade. Rilancia per ottenere un nuovo URL.
+Cloudflare Quick Tunnels don't have an explicit expiration, but if cloudflared loses
+connectivity for several minutes the tunnel drops. Relaunch to get a new URL.
 
-## Rete giù
+## Network down
 
-`launch-tunnel.sh` fallisce, il log mostra "failed to connect to Cloudflare edge".
+`launch-tunnel.sh` fails, the log shows "failed to connect to Cloudflare edge".
 
-**Messaggio all'utente:** "Sembra che il Mac non riesca a raggiungere Cloudflare. Controlla
-la connessione internet e riprova." Non mostrare lo stack trace tecnico.
+**Message for the user:** "Looks like your machine can't reach Cloudflare. Check your
+internet connection and try again." Don't show the cloudflared stack trace.

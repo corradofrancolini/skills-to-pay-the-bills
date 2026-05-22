@@ -167,3 +167,7 @@ See [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) for a detailed guide.
 ## License
 
 [MIT](LICENSE)
+
+---
+
+<sub>[![version](https://img.shields.io/github/v/tag/corradofrancolini/skills-to-pay-the-bills?label=&style=flat-square)](https://github.com/corradofrancolini/skills-to-pay-the-bills/releases)</sub>

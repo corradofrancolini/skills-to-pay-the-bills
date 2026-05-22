@@ -225,8 +225,8 @@ un tunnel ancora attivo — controlla `.tunnel.pid` e `.http.pid` prima.
 
 ## Riferimenti
 
-- `references/safety-checklist.md` — pattern sensibili, razionale, cosa fare se hai esposto
-  per sbaglio qualcosa
-- `references/troubleshooting.md` — errori comuni di cloudflared e fix
-- `references/ngrok-alternative.md` — come usare ngrok al posto di cloudflared (opt-in, se
-  servono custom subdomain o autenticazione di base, richiede signup)
+- `references/safety-checklist.md` — sensitive patterns, rationale, what to do if you
+  accidentally exposed something
+- `references/troubleshooting.md` — common cloudflared errors and fixes
+- `references/ngrok-alternative.md` — how to use ngrok instead of cloudflared (opt-in, if you
+  need a custom subdomain or basic auth; requires signup)

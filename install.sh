@@ -170,7 +170,10 @@ for skill in "${SELECTED_SKILLS[@]}"; do
   src="$SKILLS_DIR/$skill"
   dest="$TARGET/.claude/skills/$skill"
   mkdir -p "$dest"
-  cp "$src/SKILL.md" "$dest/SKILL.md"
+  # Copy the full skill tree (SKILL.md plus optional scripts/, references/, assets/)
+  # so multi-file skills install correctly. Trailing /. copies contents into dest
+  # without nesting under a duplicate subdir name.
+  cp -R "$src/." "$dest/"
   INSTALLED+=("$skill")
 
   # Collect placeholders

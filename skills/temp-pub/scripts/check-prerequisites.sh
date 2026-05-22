@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect prerequisites for the temp-pub skill.
-# Output: single-line JSON on stdout — {"platform","brew","ngrok","authtoken"}.
+# Output: single-line JSON on stdout — {"platform","brew","cloudflared","python3"}.
 # Exit code is always 0 unless the script itself is broken; consumers parse JSON.
 set -u
 
@@ -13,18 +13,16 @@ if [ "$platform" = "darwin" ] && has_cmd brew; then
   brew_ok=true
 fi
 
-ngrok_ok=false
-if has_cmd ngrok; then
-  ngrok_ok=true
+cloudflared_ok=false
+if has_cmd cloudflared; then
+  cloudflared_ok=true
 fi
 
-# `ngrok config check` exits 0 only when an authtoken is configured.
-authtoken_ok=false
-if $ngrok_ok; then
-  if ngrok config check >/dev/null 2>&1; then
-    authtoken_ok=true
-  fi
+# Python 3 is needed for the local HTTP server that backs the tunnel.
+python3_ok=false
+if has_cmd python3; then
+  python3_ok=true
 fi
 
-printf '{"platform":"%s","brew":%s,"ngrok":%s,"authtoken":%s}\n' \
-  "$platform" "$brew_ok" "$ngrok_ok" "$authtoken_ok"
+printf '{"platform":"%s","brew":%s,"cloudflared":%s,"python3":%s}\n' \
+  "$platform" "$brew_ok" "$cloudflared_ok" "$python3_ok"

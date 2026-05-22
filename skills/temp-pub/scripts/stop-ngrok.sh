@@ -6,7 +6,7 @@ set -u
 pid_file="/tmp/temp-pub/.ngrok.pid"
 
 if [ ! -f "$pid_file" ]; then
-  echo "Nessun tunnel attivo."
+  echo "No active tunnel."
   exit 0
 fi
 
@@ -14,7 +14,7 @@ pid="$(cat "$pid_file" 2>/dev/null || true)"
 rm -f "$pid_file"
 
 if [ -z "$pid" ]; then
-  echo "Nessun PID registrato."
+  echo "No PID recorded."
   exit 0
 fi
 
@@ -24,7 +24,7 @@ if kill -0 "$pid" 2>/dev/null; then
   if kill -0 "$pid" 2>/dev/null; then
     kill -9 "$pid" 2>/dev/null || true
   fi
-  echo "Tunnel chiuso."
+  echo "Tunnel stopped."
 else
-  echo "Il processo non era più attivo."
+  echo "Process was no longer running."
 fi

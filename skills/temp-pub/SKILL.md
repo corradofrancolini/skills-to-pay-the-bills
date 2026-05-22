@@ -33,10 +33,16 @@ cartella di asset.
 
 ## Convenzioni di comunicazione
 
-- **Lingua user-facing:** italiano, sempre. Tono colloquiale, uso del "tu".
+- **Lingua user-facing:** rispecchia la lingua del prompt dell'utente (se ti scrive in
+  italiano rispondi in italiano, se in inglese rispondi in inglese, e così via). Le frasi
+  di esempio dell'onboarding più sotto sono in italiano per chiarezza, ma sono *modelli di
+  intento* — rendile nella lingua corrente dell'utente. Tono colloquiale (tu / you / du / tú
+  secondo la lingua).
 - **Lunghezza:** conferme in 1 frase, spiegazioni in 2-3 frasi. Niente paragrafi lunghi.
 - **No emoji.**
 - **Sicurezza:** non mostrare mai l'authtoken ngrok nelle risposte, nemmeno parzialmente.
+- **Output degli script:** i messaggi degli script bundle sono in inglese (log tecnici).
+  Quando li mostri all'utente, riformulali nella sua lingua.
 
 ## Rileva il livello dell'utente
 
@@ -175,7 +181,7 @@ Comando: `open https://dashboard.ngrok.com/signup` (macOS) oppure `xdg-open` (Li
 
 Se ngrok chiede un "description" durante la creazione del token, suggerisci il nome del
 computer (es. `macbook-mario`). Per il walkthrough completo vedi
-`references/ngrok-signup-it.md`.
+`references/ngrok-signup.md`.
 
 ### Authtoken mancante
 
@@ -205,7 +211,7 @@ Quando l'utente dice "ferma il link", "chiudi", "stop", "spegni il tunnel" o equ
 ```bash
 bash ~/.claude/skills/temp-pub/scripts/stop-ngrok.sh
 ```
-Conferma in una frase: "Tunnel chiuso."
+Conferma in una frase nella lingua dell'utente (es. "Tunnel chiuso.", "Tunnel stopped.").
 
 ## Cleanup a fine sessione
 
@@ -221,4 +227,4 @@ un tunnel ancora attivo — controlla `.ngrok.pid` prima).
 - `references/safety-checklist.md` — pattern sensibili, razionale, cosa fare se hai esposto
   per sbaglio qualcosa
 - `references/troubleshooting.md` — errori comuni di ngrok e fix in italiano
-- `references/ngrok-signup-it.md` — walkthrough signup ngrok per utenti novizi
+- `references/ngrok-signup.md` — walkthrough signup ngrok per utenti novizi

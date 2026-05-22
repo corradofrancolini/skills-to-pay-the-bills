@@ -6,13 +6,13 @@
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Errore: indica il path da esporre." >&2
+  echo "Error: specify the path to expose." >&2
   exit 1
 fi
 
 target="$1"
 if [ ! -e "$target" ]; then
-  echo "Errore: '$target' non esiste." >&2
+  echo "Error: '$target' does not exist." >&2
   exit 1
 fi
 
@@ -24,7 +24,7 @@ else
 fi
 case "$abs_check" in
   "$HOME"|"$HOME"/|/|/etc|/etc/*|/var|/var/*|/usr|/usr/*|/System|/System/*|/Library|/Library/*|/private|/private/*|/bin|/bin/*|/sbin|/sbin/*|/dev|/dev/*)
-    echo "Errore: il path '$abs_check' è troppo ampio o di sistema. Indica un path più specifico." >&2
+    echo "Error: path '$abs_check' is too broad or a system directory. Pick a more specific path." >&2
     exit 1
     ;;
 esac
@@ -75,7 +75,7 @@ except Exception:
 done
 
 if [ -z "$url" ]; then
-  echo "Errore: non sono riuscito a leggere l'URL pubblico. Log: $log_file" >&2
+  echo "Error: could not read the public URL from ngrok. Log: $log_file" >&2
   exit 1
 fi
 

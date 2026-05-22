@@ -60,9 +60,9 @@ Self-contained skills that bundle scripts and reference docs. Unlike the templat
 
 #### [temp-pub](skills/temp-pub/)
 
-Create a temporary public URL from a local file or folder, to share quickly with clients or colleagues without going through email or cloud storage. Wraps ngrok end-to-end: detects prerequisites (Homebrew, ngrok, account, authtoken), walks the user through onboarding in Italian on first use, runs a safety scan of the path before exposing it (refuses `$HOME`/`/`/system dirs, proposes isolation under `/tmp/temp-pub/<ts>/` when it finds `.env`, `*.pem`, `.git/`, etc.), launches the tunnel, copies the URL to the clipboard, and offers a graceful shutdown command. Bundles 4 bash scripts (`check-prerequisites.sh`, `safe-prepare-share.sh`, `launch-ngrok.sh`, `stop-ngrok.sh`) and 3 reference docs (ngrok signup walkthrough, safety pattern catalog, troubleshooting).
+Create a temporary public URL from a local file or folder, to share quickly with clients or colleagues without going through email or cloud storage. Uses Cloudflare Quick Tunnels — zero account, no signup, no authtoken to manage. The skill detects prerequisites (Homebrew, cloudflared, python3), walks the user through any missing install on first use, runs a safety scan of the path before exposing it (refuses `$HOME`/`/`/system dirs, proposes isolation under `/tmp/temp-pub/<ts>/` when it finds `.env`, `*.pem`, `.git/`, etc.), starts a local Python HTTP server on a free port, exposes it through `cloudflared tunnel --url`, copies the public URL to the clipboard, and offers a graceful shutdown command. Bundles 4 bash scripts (`check-prerequisites.sh`, `safe-prepare-share.sh`, `launch-tunnel.sh`, `stop-tunnel.sh`) and 3 reference docs (safety pattern catalog, troubleshooting, ngrok alternative for users who want custom subdomains or basic auth).
 
-Platform: macOS (primary), Linux (best-effort). Dependencies: ngrok (free tier), Homebrew on macOS. User-facing messages in Italian.
+User-facing messages mirror the user's prompt language automatically (no configuration). Reference docs are kept in Italian as the canonical version; Claude translates the relevant bits on demand. Platform: macOS (primary), Linux (best-effort). Dependencies: cloudflared, Homebrew on macOS, python3 (default on macOS and most Linux distros).
 
 No placeholders. Works as-is.
 

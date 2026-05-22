@@ -5,7 +5,7 @@
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Errore: indica almeno un file o cartella da preparare." >&2
+  echo "Error: provide at least one file or folder to prepare." >&2
   exit 1
 fi
 
@@ -15,7 +15,7 @@ mkdir -p "$dest"
 
 for src in "$@"; do
   if [ ! -e "$src" ]; then
-    echo "Errore: '$src' non esiste." >&2
+    echo "Error: '$src' does not exist." >&2
     exit 1
   fi
   cp -R "$src" "$dest/"

@@ -1,21 +1,23 @@
 ---
 name: temp-pub
 description: |
-  Crea un link pubblico temporaneo a partire da un file o cartella sul computer locale, da condividere
-  rapidamente con clienti o colleghi. Usa SEMPRE questa skill quando l'utente vuole "far vedere",
-  "passare", "mandare", "mostrare", o "condividere" qualcosa che ha sul proprio Mac/PC senza
-  inviarlo per email o caricarlo su Google Drive — anche se non menziona esplicitamente "tunnel",
-  "ngrok", o "URL pubblico". Casi d'uso tipici: condividere un HTML statico, una demo locale, un PDF,
-  uno screenshot, una cartella di asset, una build di sviluppo. Gestisce installazione e configurazione
-  automatica per chi non ha mai usato strumenti di tunneling. Creates a temporary public URL from a
-  local file or folder for quick sharing — use whenever the user wants to share, expose, show, or
-  send something from their local machine without uploading to cloud storage.
+  Create a temporary public URL from a local file or folder so the user can share it
+  quickly with clients or colleagues without going through email or cloud storage. USE
+  THIS SKILL whenever the user wants to share, expose, show, send, hand off, or pass
+  something they have on their own machine to an external person — even when they don't
+  explicitly say "tunnel", "public URL", or "cloudflared". Triggers on colloquial requests
+  in any language: "voglio passare questo PDF a un cliente", "share this folder with
+  someone outside the network", "mandami un link per questo screenshot", "expose this
+  build", "fais voir ce HTML à quelqu'un", "manda este archivo a un cliente". Typical
+  targets: a static HTML, a local demo, a PDF, a screenshot, an asset folder, a
+  development build. Handles install and configuration end-to-end. User-facing replies
+  mirror the user's prompt language automatically.
 ---
 
 # temp-pub
 
 Crea un link pubblico temporaneo per un file o cartella locale, senza email o cloud storage.
-Backend unico: ngrok (free tier).
+Backend: Cloudflare Quick Tunnels (zero account, niente registrazione).
 
 ## Quando usare
 
@@ -33,15 +35,20 @@ cartella di asset.
 
 ## Convenzioni di comunicazione
 
-- **Lingua user-facing:** italiano, sempre. Tono colloquiale, uso del "tu".
+- **Lingua user-facing:** rispecchia la lingua del prompt dell'utente (se ti scrive in
+  italiano rispondi in italiano, se in inglese rispondi in inglese, e così via). Le frasi
+  di esempio dell'onboarding più sotto sono in italiano per chiarezza, ma sono *modelli di
+  intento* — rendile nella lingua corrente dell'utente. Tono colloquiale (tu / you / du / tú
+  secondo la lingua).
 - **Lunghezza:** conferme in 1 frase, spiegazioni in 2-3 frasi. Niente paragrafi lunghi.
 - **No emoji.**
-- **Sicurezza:** non mostrare mai l'authtoken ngrok nelle risposte, nemmeno parzialmente.
+- **Output degli script:** i messaggi degli script bundle sono in inglese (log tecnici).
+  Quando li mostri all'utente, riformulali nella sua lingua.
 
 ## Rileva il livello dell'utente
 
-Se l'utente menziona `ngrok` per nome, parla di "tunnel", "authtoken", "port forwarding",
-o passa un path assoluto preciso → modalità rapida, salta i preamboli educativi.
+Se l'utente menziona `cloudflared`, `tunnel`, `localhost`, `porta`, o passa un path assoluto
+preciso → modalità rapida, salta i preamboli educativi.
 
 Altrimenti → modalità guidata: spiega brevemente cosa stai facendo a ogni passo importante.
 
@@ -49,12 +56,12 @@ Altrimenti → modalità guidata: spiega brevemente cosa stai facendo a ogni pas
 
 ```
 [1] Conferma cosa esporre (file o cartella, path completo)
-[2] scripts/check-prerequisites.sh → JSON {brew, ngrok, authtoken, platform}
+[2] scripts/check-prerequisites.sh → JSON {brew, cloudflared, python3, platform}
 [3] Se manca qualcosa → onboarding (sezione sotto)
 [4] Safety check sul path
 [5] Se file sensibili → proponi isolamento via scripts/safe-prepare-share.sh
-[6] scripts/launch-ngrok.sh <path> → URL + PID, URL già in clipboard
-[7] Output finale all'utente con URL, istruzioni chiusura, link inspector
+[6] scripts/launch-tunnel.sh <path> → URL pubblico, copiato in clipboard
+[7] Output finale all'utente con URL e istruzioni di chiusura
 ```
 
 ### [1] Conferma input
@@ -68,7 +75,7 @@ Se l'utente non specifica nulla, chiedi cosa vuole esporre.
 bash ~/.claude/skills/temp-pub/scripts/check-prerequisites.sh
 ```
 
-Output JSON: `{"platform":"darwin","brew":true,"ngrok":true,"authtoken":false}`.
+Output JSON: `{"platform":"darwin","brew":true,"cloudflared":true,"python3":true}`.
 
 Decidi cosa fare in base ai campi `false`.
 
@@ -93,8 +100,8 @@ Quando il path è una cartella, controlla la presenza di questi pattern (`find` 
 è sufficiente per la maggior parte dei casi).
 
 **Soft warning (avverti, non bloccare):**
-- `node_modules/` → peso elevato
-- File > 100 MB → bandwidth limit ngrok free
+- `node_modules/` → peso elevato, lascia procedere
+- File > 100 MB → tempi di trasferimento lunghi per il destinatario
 - Cartelle con > 500 file → proponi di esporre un subset
 
 ### [5] Isolamento (se richiesto)
@@ -108,32 +115,36 @@ Usa quel path come target per il lancio.
 ### [6] Lancio
 
 ```bash
-bash ~/.claude/skills/temp-pub/scripts/launch-ngrok.sh <path>
+bash ~/.claude/skills/temp-pub/scripts/launch-tunnel.sh <path>
 ```
 Lo script:
-- Ferma eventuale tunnel precedente (`/tmp/temp-pub/.ngrok.pid`)
-- Lancia `ngrok http file://<dir>` in background (ngrok serve solo cartelle; se l'input è
-  un file singolo, lo script serve la cartella genitore e appende il filename all'URL)
-- Attende e legge l'URL pubblico via API locale `http://127.0.0.1:4040/api/tunnels`
-- Copia l'URL completo in clipboard (`pbcopy` / `xclip` / `wl-copy`)
+- Ferma eventuale tunnel/server precedente (`/tmp/temp-pub/.tunnel.pid`, `.http.pid`)
+- Sceglie una porta locale libera
+- Lancia `python3 -m http.server` in background sul `127.0.0.1:<porta>` servendo la cartella target
+- Lancia `cloudflared tunnel --url http://127.0.0.1:<porta>` in background
+- Legge l'URL pubblico (`https://*.trycloudflare.com`) dal log di cloudflared
+- Copia l'URL in clipboard (`pbcopy` / `xclip` / `wl-copy`)
 - Stampa l'URL su stdout
 
 **Nota safety quando l'input è un file singolo:** servire la cartella genitore espone tutti i
-file fratelli. Se il file è in una cartella "sporca" (es. `~/Desktop/` o un repo con `.env`),
-proponi PRIMA l'isolamento via `safe-prepare-share.sh` anche se il file in sé è innocuo.
+file fratelli a chi conosce i nomi. Se il file è in una cartella "sporca" (es. `~/Desktop/` o
+un repo con `.env`), proponi PRIMA l'isolamento via `safe-prepare-share.sh` anche se il file
+in sé è innocuo.
 
 ### [7] Output finale
 
 Messaggio all'utente (esempio):
 ```
-Link pronto: https://spectrum-vitally-refinance.ngrok-free.dev
+Link pronto: https://networking-lawyer-ago-muscles.trycloudflare.com
 (già copiato negli appunti, puoi incollarlo dove ti serve)
 
 Per chiudere: dimmi "ferma il link" oppure premi Ctrl+C nel terminale.
-Per vedere chi sta accedendo in tempo reale: apri http://127.0.0.1:4040 nel browser.
 
 Il link resta attivo finché non lo fermi.
 ```
+
+Nota: Cloudflare Quick Tunnels non ha un "inspector" locale come ngrok. Se serve vedere chi
+sta accedendo, suggerisci di guardare il log di python http.server in `/tmp/temp-pub/.http.log`.
 
 ## Onboarding
 
@@ -144,68 +155,48 @@ idempotenti: rilanciarli è sicuro.
 
 Messaggio:
 ```
-Per installare ngrok mi serve Homebrew, il "gestore di pacchetti" del Mac
+Per installare cloudflared mi serve Homebrew, il "gestore di pacchetti" del Mac
 (pensa a un App Store da terminale). Te lo installo? Ci vorrà 1-2 minuti.
 ```
 Comando (su conferma):
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
-Se l'utente rifiuta: spiega che può scaricare ngrok manualmente da https://ngrok.com/download.
+Se l'utente rifiuta: spiega che può scaricare cloudflared manualmente da
+https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/.
 
-### ngrok mancante
-
-Messaggio:
-```
-Installo ngrok. È uno strumento che crea un "ponte" temporaneo tra il tuo Mac e
-internet, in modo che chi ha il link possa vedere i tuoi file. Procedo? (~30 secondi)
-```
-Comando (macOS): `brew install ngrok`.
-Per Linux: vedi `references/troubleshooting.md` (download tarball da ngrok.com).
-
-### Account ngrok mancante
+### cloudflared mancante
 
 Messaggio:
 ```
-ngrok richiede un account gratuito (serve solo per identificare il tuo Mac,
-nessuna carta di credito). Ti apro la pagina di registrazione: completa la
-procedura e poi torna qui e dimmi "fatto".
+Installo cloudflared. È uno strumento di Cloudflare che crea un "ponte" temporaneo tra
+il tuo Mac e internet, in modo che chi ha il link possa vedere i tuoi file. Niente
+registrazione richiesta. Procedo? (~30 secondi)
 ```
-Comando: `open https://dashboard.ngrok.com/signup` (macOS) oppure `xdg-open` (Linux).
+Comando (macOS): `brew install cloudflared`.
+Per Linux: vedi `references/troubleshooting.md` (binario da Cloudflare).
 
-Se ngrok chiede un "description" durante la creazione del token, suggerisci il nome del
-computer (es. `macbook-mario`). Per il walkthrough completo vedi
-`references/ngrok-signup-it.md`.
+### Python 3 mancante
 
-### Authtoken mancante
+Praticamente sempre presente su macOS (anche se in alcune versioni va invocato come `python3`,
+che è il comando che usiamo). Se davvero manca:
+- macOS: `brew install python3`
+- Linux: già presente quasi ovunque, oppure `apt install python3` / equivalente distro
 
-Messaggio:
-```
-Adesso prendiamo la "chiave" che collega ngrok al tuo account. Te la apro nel
-browser: copia il blocco di testo che vedi sotto "Your Authtoken" e incollalo qui.
-```
-Comando: `open https://dashboard.ngrok.com/get-started/your-authtoken`.
+### Niente account, niente token
 
-Attendi che l'utente incolli il token. Validazione:
-- Formato alfanumerico (con eventuali `_`), almeno 40 caratteri
-- Se non corrisponde → "Il token non sembra valido, controlla di averlo copiato per intero"
-
-Salvataggio (NON loggare il token nelle risposte di Claude):
-```bash
-ngrok config add-authtoken <TOKEN>
-```
-Verifica:
-```bash
-ngrok config check
-```
+Cloudflare Quick Tunnels non richiede registrazione. Dopo `brew install cloudflared` puoi
+lanciare un tunnel immediatamente. Limiti: l'URL è casuale ogni volta (es.
+`https://random-words.trycloudflare.com`), nessun custom subdomain, nessuna autenticazione.
+Va benissimo per condividere un file a uso e getta.
 
 ## Shutdown
 
 Quando l'utente dice "ferma il link", "chiudi", "stop", "spegni il tunnel" o equivalenti:
 ```bash
-bash ~/.claude/skills/temp-pub/scripts/stop-ngrok.sh
+bash ~/.claude/skills/temp-pub/scripts/stop-tunnel.sh
 ```
-Conferma in una frase: "Tunnel chiuso."
+Conferma in una frase nella lingua dell'utente (es. "Tunnel chiuso.", "Tunnel stopped.").
 
 ## Cleanup a fine sessione
 
@@ -213,12 +204,13 @@ A fine sessione, se hai usato `safe-prepare-share.sh`, proponi:
 ```
 Posso ripulire le cartelle temporanee in /tmp/temp-pub/? (le ho create durante la sessione)
 ```
-Su conferma: `rm -rf /tmp/temp-pub/<timestamp>/` (mai `rm -rf /tmp/temp-pub/` intero se c'è
-un tunnel ancora attivo — controlla `.ngrok.pid` prima).
+Su conferma: `rm -rf /tmp/temp-pub/<timestamp>/`. Mai `rm -rf /tmp/temp-pub/` intero se c'è
+un tunnel ancora attivo — controlla `.tunnel.pid` e `.http.pid` prima.
 
 ## Riferimenti
 
 - `references/safety-checklist.md` — pattern sensibili, razionale, cosa fare se hai esposto
   per sbaglio qualcosa
-- `references/troubleshooting.md` — errori comuni di ngrok e fix in italiano
-- `references/ngrok-signup-it.md` — walkthrough signup ngrok per utenti novizi
+- `references/troubleshooting.md` — errori comuni di cloudflared e fix
+- `references/ngrok-alternative.md` — come usare ngrok al posto di cloudflared (opt-in, se
+  servono custom subdomain o autenticazione di base, richiede signup)

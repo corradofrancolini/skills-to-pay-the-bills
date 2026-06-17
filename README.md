@@ -81,11 +81,21 @@ Placeholders: `{{TARGET_AUDIENCE}}`, `{{FRAMEWORK}}`
 
 Self-contained skills that bundle scripts and reference docs. Unlike the templates above, these install and work as-is — no placeholders to fill in. They typically have external dependencies and are platform-specific; check each one.
 
+#### [html-report](skills/html-report/)
+
+Turn report **content** (a Markdown file with front-matter) into a fixed, self-contained "house format" HTML report: sidebar TOC, TL;DR block, callouts, badges, collapsible evidence, a 3-format copy/export button, and per-block copy icons. CSS/JS/favicon are inlined, so the output is a single portable file. Authoring uses pandoc fenced-div shortcodes (`::: tldr`, `::: callout`, `[PASS]{.ok}`, `[Stable]{.badge}` …). The chrome is frozen — a normal run can't change the look (explicit override flags exist for deliberate format changes). Fails early with install guidance if pandoc is missing.
+
+Platform: cross-platform. Dependencies: python3 (stdlib) + **pandoc** on PATH (`brew install pandoc` / `apt-get install pandoc` / `winget install JohnMacFarlane.Pandoc`).
+
+No placeholders. Works as-is.
+
+---
+
 #### [media-inventory](skills/media-inventory/)
 
-Inventory the images and videos of any website. For every asset it records pixel dimensions, format/MIME, file weight (KB), `alt`/`title`, the page(s) it appears on, and the page template (both URL-derived and from the WordPress `<body class>`), then writes a CSV plus a Markdown summary with format×template matrices. Discovers pages via `robots.txt` → `sitemap*.xml` (nested indexes handled), with an internal-link crawl fallback; single-page, explicit `--pages`/`--pages-file`, or whole-site `--site` modes. Built to survive real sites: a global requests-per-minute limiter (`--rpm`), adaptive backoff that respects `Retry-After`, clean abort on repeated WAF/Wordfence 429/503 in both the page-scan and asset-probing phases, a `.cache/` of downloads, and a phase-1 checkpoint so `--resume` finishes without re-scanning. Pure Python stdlib; probes dimensions with `sips` (macOS) or ImageMagick `identify`, and videos with `ffprobe` (read remotely, not downloaded).
+Inventory the images and videos of any website. For every asset it records pixel dimensions, format/MIME, file weight (KB), `alt`/`title`, the page(s) it appears on, and the page template (both URL-derived and from the WordPress `<body class>`), then writes a CSV plus a Markdown summary with format×template matrices. Discovers pages via `robots.txt` → `sitemap*.xml` (nested indexes handled), with an internal-link crawl fallback; single-page, explicit `--pages`/`--pages-file`, or whole-site `--site` modes. Built to survive real sites: a global requests-per-minute limiter (`--rpm`), adaptive backoff that respects `Retry-After`, clean abort on repeated WAF/Wordfence 429/503 in both the page-scan and asset-probing phases, a `.cache/` of downloads, and a phase-1 checkpoint so `--resume` finishes without re-scanning. Reads image dimensions **pure-Python** by parsing headers (PNG/JPEG/GIF/BMP/WebP/AVIF-HEIF/ICO; SVG via XML) — no external tools; `sips`/`identify` only as optional fallbacks. Optional **`--source`** CMS-API mode (WordPress/Shopify, auto-detected, falls back to scraping) for reliable upload dates/alt and to sidestep WAF limits, and **`--render`** (headless Playwright) for JS/lazy/CSS-background media and the served srcset variant.
 
-Platform: macOS (primary), Linux (best-effort). Dependencies: python3 (stdlib only); `sips` (macOS) or ImageMagick `identify`; `ffprobe` (ffmpeg) for video. Optional Firecrawl fallback for JS-only sites (never a Gemini/Google backend).
+Platform: cross-platform (macOS/Linux/Windows). Dependencies: python3 (stdlib only). Optional: `ffprobe` (ffmpeg) for video; Playwright for `--render`; Firecrawl for JS-only sites.
 
 No placeholders. Works as-is.
 

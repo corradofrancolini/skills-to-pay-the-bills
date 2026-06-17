@@ -9,8 +9,22 @@
 # Two PIDs are tracked (http server + cloudflared) for clean shutdown.
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
-  echo "Error: specify the path to expose." >&2
+# Args: [--ttl MINUTES] [--no-isolate] <path>
+ttl=0
+isolate_single=1
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ttl) ttl="${2:-0}"; shift 2 ;;
+    --no-isolate) isolate_single=0; shift ;;
+    --) shift; while [ $# -gt 0 ]; do args+=("$1"); shift; done ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- "${args[@]:-}"
+
+if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
+  echo "Error: specify the path to expose. Usage: launch-tunnel.sh [--ttl MINUTES] [--no-isolate] <path>" >&2
   exit 1
 fi
 
@@ -33,22 +47,36 @@ case "$abs_check" in
     ;;
 esac
 
-# Resolve the directory to serve. For a single file, serve its parent and append
-# the filename to the public URL at the end.
-filename_suffix=""
-if [ -d "$target" ]; then
-  abs_dir="$(cd "$target" && pwd)"
-else
-  abs_dir="$(cd "$(dirname "$target")" && pwd)"
-  filename_suffix="/$(basename "$target")"
-fi
-
 state_dir="/tmp/temp-pub"
 mkdir -p "$state_dir"
 http_pid_file="$state_dir/.http.pid"
 tunnel_pid_file="$state_dir/.tunnel.pid"
 http_log="$state_dir/.http.log"
 tunnel_log="$state_dir/.tunnel.log"
+served_marker="$state_dir/.servedir"
+rm -f "$served_marker"
+
+# Resolve the directory to serve.
+#  - folder: serve it directly.
+#  - single file: ISOLATE by default (copy into a fresh dir) so sibling files are
+#    never exposed, then append the filename to the public URL. --no-isolate serves
+#    the parent directory instead.
+filename_suffix=""
+if [ -d "$target" ]; then
+  abs_dir="$(cd "$target" && pwd)"
+else
+  src="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
+  filename_suffix="/$(basename "$target")"
+  if [ "$isolate_single" = "1" ]; then
+    iso="$state_dir/share-$(date +%s)-$$"
+    mkdir -p "$iso"
+    cp "$src" "$iso/"
+    abs_dir="$iso"
+    echo "$iso" > "$served_marker"
+  else
+    abs_dir="$(dirname "$src")"
+  fi
+fi
 
 # Stop any previous tunnel/server started by this skill.
 for pf in "$tunnel_pid_file" "$http_pid_file"; do
@@ -101,3 +129,27 @@ elif command -v wl-copy >/dev/null 2>&1; then
 fi
 
 echo "$full_url"
+
+# Record state for `status-tunnel.sh`.
+date +%s > "$state_dir/.start"
+printf "%s" "$full_url" > "$state_dir/.url"
+
+# Optional auto-stop after --ttl minutes (avoids "forgotten open link").
+# IMPORTANT: redirect the watcher's stdin/out/err to /dev/null so it does NOT keep
+# the caller's stdout pipe open — otherwise `url=$(launch-tunnel.sh --ttl N ...)`
+# would block until the sleep finishes.
+if [ "${ttl:-0}" -gt 0 ] 2>/dev/null; then
+  ttl_script_dir="$(cd "$(dirname "$0")" && pwd)"
+  touch "$state_dir/.ttl.active"   # marker: removing it cancels the watcher
+  (
+    for ((k = 0; k < ttl; k++)); do
+      sleep 60
+      [ -f "$state_dir/.ttl.active" ] || exit 0   # cancelled by stop-tunnel.sh
+    done
+    rm -f "$state_dir/.ttl.pid"                    # so stop won't try to kill us mid-run
+    bash "$ttl_script_dir/stop-tunnel.sh"
+  ) >/dev/null 2>&1 </dev/null &
+  echo $! > "$state_dir/.ttl.pid"
+  disown 2>/dev/null || true
+  echo "(auto-stop scheduled in ${ttl} min)" >&2
+fi

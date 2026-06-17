@@ -131,21 +131,31 @@ Usa quel path come target per il lancio.
 ### [6] Lancio
 
 ```bash
-bash ~/.claude/skills/temp-pub/scripts/launch-tunnel.sh <path>
+bash ~/.claude/skills/temp-pub/scripts/launch-tunnel.sh [--ttl MINUTI] [--no-isolate] <path>
 ```
 Lo script:
 - Ferma eventuale tunnel/server precedente (`/tmp/temp-pub/.tunnel.pid`, `.http.pid`)
+- **File singolo → isolamento automatico**: copia *solo* quel file in `/tmp/temp-pub/share-<ts>/`
+  e serve quella cartella, così i file "fratelli" non sono mai esposti (override con `--no-isolate`).
+  Per le cartelle, serve la cartella così com'è.
 - Sceglie una porta locale libera
-- Lancia `python3 -m http.server` in background sul `127.0.0.1:<porta>` servendo la cartella target
+- Lancia `python3 -m http.server` sul `127.0.0.1:<porta>` servendo la dir target
 - Lancia `cloudflared tunnel --url http://127.0.0.1:<porta>` in background
-- Legge l'URL pubblico (`https://*.trycloudflare.com`) dal log di cloudflared
-- Copia l'URL in clipboard (`pbcopy` / `xclip` / `wl-copy`)
-- Stampa l'URL su stdout
+- Legge l'URL pubblico (`https://*.trycloudflare.com`), lo copia in clipboard, lo stampa su stdout
+- **`--ttl MINUTI`** (consigliato): pianifica un **auto-stop** dopo N minuti (watcher cancellabile),
+  per evitare il "link dimenticato aperto". Senza `--ttl` resta attivo finché non lo fermi.
 
-**Nota safety quando l'input è un file singolo:** servire la cartella genitore espone tutti i
-file fratelli a chi conosce i nomi. Se il file è in una cartella "sporca" (es. `~/Desktop/` o
-un repo con `.env`), proponi PRIMA l'isolamento via `safe-prepare-share.sh` anche se il file
-in sé è innocuo.
+Proponi `--ttl` di default per condivisioni veloci (es. `--ttl 30`). L'isolamento del file singolo
+è ora automatico: non serve più richiamare a mano `safe-prepare-share.sh` per quel caso (resta utile
+per esporre **più file selezionati** insieme).
+
+### [6b] Stato
+
+```bash
+bash ~/.claude/skills/temp-pub/scripts/status-tunnel.sh
+```
+Mostra se il tunnel è attivo, l'URL, da quanto è su, quante richieste ha servito e se c'è un
+auto-stop schedulato. Utile per ricordarsi dei link lasciati aperti.
 
 ### [7] Output finale
 
@@ -156,7 +166,7 @@ Link pronto: https://networking-lawyer-ago-muscles.trycloudflare.com
 
 Per chiudere: dimmi "ferma il link" oppure premi Ctrl+C nel terminale.
 
-Il link resta attivo finché non lo fermi.
+Il link resta attivo finché non lo fermi (o fino all'auto-stop, se hai usato --ttl).
 ```
 
 Nota: Cloudflare Quick Tunnels non ha un "inspector" locale come ngrok. Se serve vedere chi

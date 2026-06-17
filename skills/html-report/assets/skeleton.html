@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="{{FAVICON_DATAURI}}">
+  <title>{{TITLE}}</title>
+  <style>
+{{CSS}}
+  </style>
+</head>
+<body>
+  <div class="copy-wrap">
+    <button class="copy-cta" id="copy-btn" aria-haspopup="true" aria-expanded="false">Copy report <span class="caret">▾</span></button>
+    <div class="copy-menu" id="copy-menu" role="menu">
+      <button data-fmt="rich" role="menuitem"><span class="fmt-label">Rich text</span><span class="fmt-hint">Best for Gmail, Google Docs, Slack, Word</span></button>
+      <button data-fmt="markdown" role="menuitem"><span class="fmt-label">Markdown</span><span class="fmt-hint">Best for Notion, GitHub, technical docs</span></button>
+      <button data-fmt="plain" role="menuitem"><span class="fmt-label">Plain text</span><span class="fmt-hint">No formatting — universal fallback</span></button>
+    </div>
+  </div>
+  <div class="copy-toast" id="copy-toast">Copied</div>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Table of contents">
+      <div class="toc-title">Contents</div>
+      <ol>
+{{TOC_OL}}
+      </ol>
+    </aside>
+    <div class="content">
+  <header>
+    <h1>{{H1}}</h1>
+    <div class="meta">{{META}}</div>
+  </header>
+  <main>
+{{BODY}}
+  </main>
+  <footer>{{FOOTER}}</footer>
+    </div>
+  </div>
+  <script>
+{{JS}}
+  </script>
+</body>
+</html>

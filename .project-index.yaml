@@ -27,6 +27,9 @@ tree:
       - name: "design-system/"
         desc: "Design token consistency"
         tag: quality
+      - name: "html-report/"
+        desc: "Markdown → fixed house-format HTML report"
+        tag: utility
       - name: "media-inventory/"
         desc: "Website image/video inventory (dimensions, format, weight, template)"
         tag: utility

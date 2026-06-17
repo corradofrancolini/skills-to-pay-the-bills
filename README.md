@@ -81,6 +81,16 @@ Placeholders: `{{TARGET_AUDIENCE}}`, `{{FRAMEWORK}}`
 
 Self-contained skills that bundle scripts and reference docs. Unlike the templates above, these install and work as-is — no placeholders to fill in. They typically have external dependencies and are platform-specific; check each one.
 
+#### [media-inventory](skills/media-inventory/)
+
+Inventory the images and videos of any website. For every asset it records pixel dimensions, format/MIME, file weight (KB), `alt`/`title`, the page(s) it appears on, and the page template (both URL-derived and from the WordPress `<body class>`), then writes a CSV plus a Markdown summary with format×template matrices. Discovers pages via `robots.txt` → `sitemap*.xml` (nested indexes handled), with an internal-link crawl fallback; single-page, explicit `--pages`/`--pages-file`, or whole-site `--site` modes. Built to survive real sites: a global requests-per-minute limiter (`--rpm`), adaptive backoff that respects `Retry-After`, clean abort on repeated WAF/Wordfence 429/503 in both the page-scan and asset-probing phases, a `.cache/` of downloads, and a phase-1 checkpoint so `--resume` finishes without re-scanning. Pure Python stdlib; probes dimensions with `sips` (macOS) or ImageMagick `identify`, and videos with `ffprobe` (read remotely, not downloaded).
+
+Platform: macOS (primary), Linux (best-effort). Dependencies: python3 (stdlib only); `sips` (macOS) or ImageMagick `identify`; `ffprobe` (ffmpeg) for video. Optional Firecrawl fallback for JS-only sites (never a Gemini/Google backend).
+
+No placeholders. Works as-is.
+
+---
+
 #### [temp-pub](skills/temp-pub/)
 
 Create a temporary public URL from a local file or folder, to share quickly with clients or colleagues without going through email or cloud storage. Uses Cloudflare Quick Tunnels — zero account, no signup, no authtoken to manage. The skill detects prerequisites (Homebrew, cloudflared, python3), walks the user through any missing install on first use, runs a safety scan of the path before exposing it (refuses `$HOME`/`/`/system dirs, proposes isolation under `/tmp/temp-pub/<ts>/` when it finds `.env`, `*.pem`, `.git/`, etc.), starts a local Python HTTP server on a free port, exposes it through `cloudflared tunnel --url`, copies the public URL to the clipboard, and offers a graceful shutdown command. Bundles 4 bash scripts (`check-prerequisites.sh`, `safe-prepare-share.sh`, `launch-tunnel.sh`, `stop-tunnel.sh`) and 3 reference docs (safety pattern catalog, troubleshooting, ngrok alternative for users who want custom subdomains or basic auth).

@@ -1,0 +1,37 @@
+{
+  "skill_name": "media-inventory",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Mi fai un inventario di dimensioni, formato e peso di tutte le immagini e i video della homepage di https://www.example.com/ ? Voglio un CSV.",
+      "expected_output": "inventario.csv + inventario.md for the single page; columns include larghezza_px/altezza_px, formato, peso_kb, asset_url; image rows have dimensions.",
+      "files": [],
+      "assertions": [
+        {"id": "csv_exists", "text": "An inventario.csv file is produced"},
+        {"id": "has_columns", "text": "CSV header contains asset_url, tipo, formato, larghezza_px, altezza_px, peso_kb"},
+        {"id": "dims_present", "text": "Most image rows have non-empty larghezza_px and altezza_px"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Voglio un inventario completo dei media di tutto il sito example.com (non solo la home), con peso in KB e dimensioni in pixel, e una tabella riassuntiva per formato.",
+      "expected_output": "Whole-site crawl via sitemap; CSV + MD; MD has a per-format count table and totals; more pages than the single-page case.",
+      "files": [],
+      "assertions": [
+        {"id": "multipage", "text": "More than one page was scanned (sitemap discovery used)"},
+        {"id": "md_summary", "text": "inventario.md contains a per-format count table and a total weight summary"},
+        {"id": "origin_pages", "text": "CSV pagine_origine column maps assets to the pages they appear on"}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Che dimensioni e che formato hanno le immagini di questa pagina? https://www.example.com/ — mi basta sapere quali sono troppo grandi.",
+      "expected_output": "Single-page inventory plus a short interpretation highlighting oversized/heaviest images.",
+      "files": [],
+      "assertions": [
+        {"id": "csv_exists", "text": "An inventario.csv is produced for the page"},
+        {"id": "highlights_large", "text": "The answer highlights the heaviest/largest images (uses peso_kb and dimensions)"}
+      ]
+    }
+  ]
+}

@@ -16,17 +16,17 @@ This is a **Claude Code skill** — you don't run anything yourself. Describe wh
 want in natural language: the skill triggers automatically (no command to type), and
 Claude runs the pipeline and hands you the CSV + summary. Example prompts:
 
-- "Fammi un **inventario** delle immagini e dei video di `https://www.example.com` — dimensioni, formato e peso, in CSV."
-- "**Quanto pesano** le immagini della homepage di example.com? Quali sono troppo grandi?"
-- "**Censisci tutti i media** del sito example.com (tutte le pagine) e dimmi quali formati sono usati in quale tipo di pagina."
+- "Make an **inventory** of the images and videos on `https://www.example.com` — dimensions, format and weight, as a CSV."
+- "**How heavy** are the images on example.com's homepage? Which ones are too big?"
+- "**Inventory all the media** on the whole example.com site (every page) and tell me which formats are used in which type of page."
 - "Inventory every image on `example.com/blog` and **flag the ones over 500 KB**."
 - "**Audit the media** of this site before the redesign: list assets with width×height, format, and which template uses them."
 
 You can steer it in plain language too:
 
-- "vai piano, il sito ha Wordfence" → lower request rate (`--rpm`)
-- "solo queste 5 pagine" / "tutto il sito" → explicit pages vs `--site`
-- "riprendi da dove eri" → resume from the checkpoint (`--resume`)
+- "go easy, the site is behind Wordfence" → lower request rate (`--rpm`)
+- "just these 5 pages" / "the whole site" → explicit pages vs `--site`
+- "resume where you left off" → resume from the checkpoint (`--resume`)
 
 The CLI below is simply **what Claude runs under the hood** — handy if you ever want
 to run it manually or in a script.

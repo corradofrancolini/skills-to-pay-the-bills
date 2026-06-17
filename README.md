@@ -83,9 +83,9 @@ Self-contained skills that bundle scripts and reference docs. Unlike the templat
 
 #### [html-report](skills/html-report/)
 
-Turn report **content** (a Markdown file with front-matter) into a fixed, self-contained "house format" HTML report: sidebar TOC, TL;DR block, callouts, badges, collapsible evidence, a 3-format copy/export button, and per-block copy icons. CSS/JS/favicon are inlined, so the output is a single portable file. Authoring uses pandoc fenced-div shortcodes (`::: tldr`, `::: callout`, `[PASS]{.ok}`, `[Stable]{.badge}` …). The chrome is frozen — a normal run can't change the look (explicit override flags exist for deliberate format changes). Fails early with install guidance if pandoc is missing.
+Turn report **content** (a Markdown file with front-matter) into a fixed, self-contained "house format" HTML report: sidebar TOC, TL;DR block, callouts, badges, collapsible evidence, a 3-format copy/export button, and per-block copy icons. CSS/JS/favicon are inlined, so the output is a single portable file. Authoring uses pandoc fenced-div shortcodes (`::: tldr`, `::: callout`, `[PASS]{.ok}`, `[Stable]{.badge}` …). The chrome is frozen — a normal run can't change the look (explicit override flags exist for deliberate format changes). Fails early with install guidance if pandoc is missing. Optional **`--inline-images`** embeds image sources as data: URIs (fully offline report), and **`--pdf`** renders a PDF via headless Chromium (expanding collapsibles, hiding the interactive buttons).
 
-Platform: cross-platform. Dependencies: python3 (stdlib) + **pandoc** on PATH (`brew install pandoc` / `apt-get install pandoc` / `winget install JohnMacFarlane.Pandoc`).
+Platform: cross-platform. Dependencies: python3 (stdlib) + **pandoc** on PATH (`brew install pandoc` / `apt-get install pandoc` / `winget install JohnMacFarlane.Pandoc`); Playwright optional for `--pdf`.
 
 No placeholders. Works as-is.
 
@@ -103,9 +103,9 @@ No placeholders. Works as-is.
 
 #### [temp-pub](skills/temp-pub/)
 
-Create a temporary public URL from a local file or folder, to share quickly with clients or colleagues without going through email or cloud storage. Uses Cloudflare Quick Tunnels — zero account, no signup, no authtoken to manage. The skill detects prerequisites (Homebrew, cloudflared, python3), walks the user through any missing install on first use, runs a safety scan of the path before exposing it (refuses `$HOME`/`/`/system dirs, proposes isolation under `/tmp/temp-pub/<ts>/` when it finds `.env`, `*.pem`, `.git/`, etc.), starts a local Python HTTP server on a free port, exposes it through `cloudflared tunnel --url`, copies the public URL to the clipboard, and offers a graceful shutdown command. Bundles 4 bash scripts (`check-prerequisites.sh`, `safe-prepare-share.sh`, `launch-tunnel.sh`, `stop-tunnel.sh`) and 3 reference docs (safety pattern catalog, troubleshooting, ngrok alternative for users who want custom subdomains or basic auth).
+Create a temporary public URL from a local file or folder, to share quickly with clients or colleagues without going through email or cloud storage. Uses Cloudflare Quick Tunnels — zero account, no signup, no authtoken to manage. The skill detects prerequisites (Homebrew, cloudflared, python3), walks the user through any missing install on first use, runs a safety scan of the path before exposing it (refuses `$HOME`/`/`/system dirs), **auto-isolates a single file** (copies just that file into a fresh dir so sibling files are never exposed), starts a local HTTP server on a free port, exposes it through `cloudflared tunnel --url`, copies the public URL to the clipboard, and offers a graceful shutdown. Options: **`--ttl N`** schedules an auto-stop after N minutes (no "forgotten open link"), **`--auth`** protects the link with HTTP Basic Auth (a random password, safe over the HTTPS tunnel), and **`status-tunnel.sh`** reports uptime / requests served / scheduled auto-stop. Bundles bash scripts (`check-prerequisites`, `safe-prepare-share`, `launch-tunnel`, `status-tunnel`, `stop-tunnel`) + a tiny `authserver.py`, and 3 reference docs (safety patterns, troubleshooting, ngrok alternative).
 
-User-facing messages mirror the user's prompt language automatically (no configuration). Platform: macOS (primary), Linux (best-effort). Dependencies: cloudflared, Homebrew on macOS, python3 (default on macOS and most Linux distros).
+User-facing messages mirror the user's prompt language automatically (no configuration). Platform: macOS (primary), Linux (best-effort). Dependencies: cloudflared, Homebrew on macOS, python3.
 
 No placeholders. Works as-is.
 

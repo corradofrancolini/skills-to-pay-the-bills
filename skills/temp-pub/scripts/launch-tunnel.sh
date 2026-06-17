@@ -9,19 +9,23 @@
 # Two PIDs are tracked (http server + cloudflared) for clean shutdown.
 set -euo pipefail
 
-# Args: [--ttl MINUTES] [--no-isolate] <path>
+# Args: [--ttl MINUTES] [--no-isolate] [--auth] <path>
 ttl=0
 isolate_single=1
+auth=0
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --ttl) ttl="${2:-0}"; shift 2 ;;
     --no-isolate) isolate_single=0; shift ;;
+    --auth) auth=1; shift ;;
     --) shift; while [ $# -gt 0 ]; do args+=("$1"); shift; done ;;
     *) args+=("$1"); shift ;;
   esac
 done
 set -- "${args[@]:-}"
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
 
 if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
   echo "Error: specify the path to expose. Usage: launch-tunnel.sh [--ttl MINUTES] [--no-isolate] <path>" >&2
@@ -93,8 +97,19 @@ sleep 1
 # Pick a free local port for the HTTP server.
 port="$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")"
 
-# Start the local HTTP server.
-nohup python3 -m http.server "$port" --bind 127.0.0.1 --directory "$abs_dir" > "$http_log" 2>&1 &
+# Start the local HTTP server (plain, or Basic-Auth-protected with --auth).
+auth_user=""
+auth_pass=""
+if [ "$auth" = "1" ]; then
+  auth_user="guest"
+  auth_pass="$(python3 -c 'import secrets; print(secrets.token_urlsafe(9))')"
+  # Password passed via env (not argv) so it never appears in `ps`.
+  TEMPPUB_USER="$auth_user" TEMPPUB_PASS="$auth_pass" \
+    nohup python3 "$script_dir/authserver.py" --port "$port" --bind 127.0.0.1 --dir "$abs_dir" > "$http_log" 2>&1 &
+  echo "$auth_user" > "$state_dir/.auth"
+else
+  nohup python3 -m http.server "$port" --bind 127.0.0.1 --directory "$abs_dir" > "$http_log" 2>&1 &
+fi
 echo $! > "$http_pid_file"
 
 # Give the server a moment to bind before cloudflared tries to reach it.
@@ -133,6 +148,10 @@ echo "$full_url"
 # Record state for `status-tunnel.sh`.
 date +%s > "$state_dir/.start"
 printf "%s" "$full_url" > "$state_dir/.url"
+
+if [ "$auth" = "1" ]; then
+  echo "(protected — user: ${auth_user}  password: ${auth_pass})" >&2
+fi
 
 # Optional auto-stop after --ttl minutes (avoids "forgotten open link").
 # IMPORTANT: redirect the watcher's stdin/out/err to /dev/null so it does NOT keep

@@ -32,7 +32,7 @@ if [ -f "$state_dir/.servedir" ]; then
   case "$served" in "$state_dir"/share-*) [ -n "$served" ] && rm -rf "$served" ;; esac
   rm -f "$state_dir/.servedir"
 fi
-rm -f "$state_dir/.start" "$state_dir/.url"
+rm -f "$state_dir/.start" "$state_dir/.url" "$state_dir/.auth"
 
 if $killed_any; then
   echo "Tunnel stopped."

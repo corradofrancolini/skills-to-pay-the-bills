@@ -15,6 +15,9 @@ fi
 
 url="$(cat "$state_dir/.url" 2>/dev/null || echo '?')"
 echo "Active. URL: $url"
+if [ -f "$state_dir/.auth" ]; then
+  echo "Protected: Basic Auth (user: $(cat "$state_dir/.auth" 2>/dev/null))"
+fi
 
 start="$(cat "$state_dir/.start" 2>/dev/null || true)"
 if [ -n "$start" ]; then

@@ -18,8 +18,73 @@ Input contract (the stable seam — see references/authoring-guide.md):
 
 Deps: python3 stdlib + pandoc on PATH. No pip packages.
 """
-import argparse, base64, json, re, shutil, subprocess, sys
+import argparse, base64, json, mimetypes, os, re, shutil, subprocess, sys
 from pathlib import Path
+
+
+def inline_images_in_html(html: str, base_dir: Path, max_kb: int) -> str:
+    """Embed <img src> as data: URIs (http/https or local files) for a fully
+    self-contained, offline report. Images larger than max_kb are left linked."""
+    import urllib.request
+    limit = max_kb * 1024
+    cache: dict[str, str | None] = {}
+
+    def fetch(url: str):
+        if url in cache:
+            return cache[url]
+        data = ctype = None
+        try:
+            if url.startswith(("http://", "https://")):
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 html-report"})
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    data, ctype = r.read(), r.headers.get_content_type()
+            elif not url.startswith("data:"):
+                p = Path(url) if os.path.isabs(url) else (base_dir / url)
+                if p.exists():
+                    data = p.read_bytes()
+                    ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+        except Exception:
+            data = None
+        rep = None
+        if data is not None and len(data) <= limit:
+            rep = f"data:{ctype or 'application/octet-stream'};base64,{base64.b64encode(data).decode()}"
+        cache[url] = rep
+        return rep
+
+    def repl(m):
+        whole, url = m.group(0), m.group(1)
+        if url.startswith("data:"):
+            return whole
+        rep = fetch(url)
+        return whole.replace(url, rep) if rep else whole
+
+    return re.sub(r'<img\b[^>]*?\bsrc="([^"]+)"', repl, html)
+
+
+def html_to_pdf(html_path: Path, pdf_path: Path) -> bool:
+    """Render the built HTML to PDF with headless Chromium (Playwright). Expands
+    all <details> and hides interactive chrome so the print is complete & clean."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        sys.stderr.write("--pdf: Playwright not installed; skipping PDF.\n"
+                         "  pip install playwright && playwright install chromium\n")
+        return False
+    hide = "@media print { #copy-btn, button[data-fmt], .block-copy { display:none !important; } }"
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page()
+            page.goto(Path(html_path).resolve().as_uri(), wait_until="networkidle")
+            page.evaluate("document.querySelectorAll('details').forEach(d => d.open = true)")
+            page.add_style_tag(content=hide)
+            page.pdf(path=str(pdf_path), format="A4", print_background=True,
+                     margin={"top": "14mm", "bottom": "14mm", "left": "12mm", "right": "12mm"})
+            browser.close()
+        return True
+    except Exception as e:
+        sys.stderr.write(f"--pdf: failed to render PDF: {e}\n")
+        return False
 
 
 def require_pandoc() -> None:
@@ -114,6 +179,13 @@ def main():
     ap.add_argument("--override-css")
     ap.add_argument("--override-js")
     ap.add_argument("--favicon")
+    ap.add_argument("--inline-images", action="store_true",
+                    help="Embed <img> sources as data: URIs (self-contained / offline).")
+    ap.add_argument("--max-inline-kb", type=int, default=2048,
+                    help="Skip inlining images larger than this (default 2048 KB).")
+    ap.add_argument("--pdf", nargs="?", const="", default=None,
+                    help="Also render a PDF (headless Chromium / Playwright). Optional output "
+                         "path; defaults next to the HTML.")
     args = ap.parse_args()
 
     require_pandoc()
@@ -151,6 +223,9 @@ def main():
     }.items():
         out_html = out_html.replace(token, value)
 
+    if args.inline_images:
+        out_html = inline_images_in_html(out_html, src.parent, args.max_inline_kb)
+
     out_path = Path(args.out) if args.out else src.with_suffix(".html")
     out_path.write_text(out_html)
 
@@ -169,6 +244,11 @@ def main():
     }
     out_path.with_suffix(".meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
     print(out_path.resolve())
+
+    if args.pdf is not None:
+        pdf_path = Path(args.pdf) if args.pdf else out_path.with_suffix(".pdf")
+        if html_to_pdf(out_path, pdf_path):
+            print(pdf_path.resolve())
 
 
 if __name__ == "__main__":

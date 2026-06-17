@@ -131,7 +131,7 @@ Usa quel path come target per il lancio.
 ### [6] Lancio
 
 ```bash
-bash ~/.claude/skills/temp-pub/scripts/launch-tunnel.sh [--ttl MINUTI] [--no-isolate] <path>
+bash ~/.claude/skills/temp-pub/scripts/launch-tunnel.sh [--ttl MINUTI] [--no-isolate] [--auth] <path>
 ```
 Lo script:
 - Ferma eventuale tunnel/server precedente (`/tmp/temp-pub/.tunnel.pid`, `.http.pid`)
@@ -144,6 +144,9 @@ Lo script:
 - Legge l'URL pubblico (`https://*.trycloudflare.com`), lo copia in clipboard, lo stampa su stdout
 - **`--ttl MINUTI`** (consigliato): pianifica un **auto-stop** dopo N minuti (watcher cancellabile),
   per evitare il "link dimenticato aperto". Senza `--ttl` resta attivo finché non lo fermi.
+- **`--auth`**: protegge il link con **HTTP Basic Auth** (utente `guest` + password casuale generata,
+  stampata su stderr). Le credenziali viaggiano sul tunnel **HTTPS**, quindi protette in transito.
+  Da proporre quando il contenuto non deve essere visibile a chiunque abbia l'URL.
 
 Proponi `--ttl` di default per condivisioni veloci (es. `--ttl 30`). L'isolamento del file singolo
 è ora automatico: non serve più richiamare a mano `safe-prepare-share.sh` per quel caso (resta utile

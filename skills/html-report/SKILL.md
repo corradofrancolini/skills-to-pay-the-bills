@@ -62,6 +62,13 @@ never edit the default assets in place. See `references/house-format-spec.md`.
 `--out <path>` (default: input basename `.html`) · `--no-toc` · `--override-css <file>` ·
 `--override-js <file>` · `--favicon <png>`.
 
+- `--inline-images` — embed `<img>` sources (http/https or local files) as data: URIs so the
+  report is fully self-contained / offline. `--max-inline-kb N` (default 2048) leaves images
+  bigger than that linked, to avoid a huge file.
+- `--pdf [path]` — also render a PDF via headless Chromium (Playwright): expands all `<details>`
+  and hides the interactive buttons so the print is complete and clean. Needs
+  `pip install playwright && playwright install chromium`; skips with a hint if unavailable.
+
 ## Verification recipe
 
 - Static: tag balance; grep output for external refs (must be none except optional `apple-touch-icon.png`); `node --check` on the `<script>`; assert `data:image/png;base64,` favicon present; TOC `<li>` count == h2 count and every `href="#x"` has a matching `id="x"`.

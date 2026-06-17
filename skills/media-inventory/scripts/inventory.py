@@ -791,6 +791,98 @@ def inventory_via_api(base_url: str, source: str, quiet: bool):
 
 
 # --------------------------------------------------------------------------- #
+# Headless render (Playwright, optional)
+# Captures media the static parser misses: JS-injected images, lazy-loaded ones,
+# and CSS background-images. Also reads intrinsic dimensions straight from the DOM
+# (naturalWidth/Height) and `img.currentSrc` — the srcset variant actually served
+# at the chosen viewport. Optional dependency: pip install playwright && playwright install chromium
+# --------------------------------------------------------------------------- #
+JS_COLLECT = r"""() => {
+  const out = [];
+  const push = (u, kind, extra) => { if (u && u.indexOf('data:') !== 0) out.push(Object.assign({url: u, kind: kind}, extra || {})); };
+  document.querySelectorAll('img').forEach(img =>
+    push(img.currentSrc || img.src, 'image', {alt: img.alt || '', title: img.title || '', nw: img.naturalWidth || 0, nh: img.naturalHeight || 0}));
+  document.querySelectorAll('video').forEach(v => {
+    push(v.currentSrc || v.src, 'video', {nw: v.videoWidth || 0, nh: v.videoHeight || 0});
+    if (v.poster) push(v.poster, 'image', {});
+  });
+  document.querySelectorAll('source').forEach(s => { if (s.src) push(s.src, 'media', {}); });
+  document.querySelectorAll('*').forEach(el => {
+    const bg = getComputedStyle(el).backgroundImage;
+    if (bg && bg.indexOf('url(') >= 0) {
+      const re = /url\((['"]?)(.*?)\1\)/g; let m;
+      while ((m = re.exec(bg))) push(m[2], 'image', {});
+    }
+  });
+  return {assets: out, bodyClass: (document.body && document.body.className) || ''};
+}"""
+
+
+def start_browser(viewport):
+    """Return (playwright, browser, page) or None if Playwright isn't available."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+    pw = sync_playwright().start()
+    browser = pw.chromium.launch(headless=True)
+    ctx = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]},
+                              user_agent=UA, device_scale_factor=1)
+    return pw, browser, ctx.new_page()
+
+
+def render_page_assets(page, page_url, quiet):
+    """Render page_url in the headless browser and return (found, meta, body_class),
+    matching extract_assets() but from the live DOM (meta also carries nw/nh)."""
+    try:
+        page.goto(page_url, wait_until="networkidle", timeout=30000)
+    except Exception:
+        try:
+            page.goto(page_url, wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            return [], {}, ""
+    try:  # auto-scroll to trigger lazy-loading
+        page.evaluate("""async () => { await new Promise(res => {
+            let y = 0, n = 0; const step = Math.max(300, window.innerHeight);
+            const t = setInterval(() => { window.scrollBy(0, step); y += step; n++;
+              if (y >= document.body.scrollHeight || n > 40) { clearInterval(t); res(); } }, 80);
+        }); }""")
+        page.wait_for_timeout(700)
+    except Exception:
+        pass
+    try:
+        data = page.evaluate(JS_COLLECT)
+    except Exception:
+        return [], {}, ""
+    seen, meta = {}, {}
+    for a in data.get("assets", []):
+        url = urldefrag(urljoin(page_url, a.get("url") or ""))[0]
+        if not url or url.startswith("data:"):
+            continue
+        seen.setdefault(url, a.get("kind") or "image")
+        m = meta.setdefault(url, {})
+        for k in ("alt", "title", "nw", "nh"):
+            v = a.get(k)
+            if v and not m.get(k):
+                m[k] = v
+    return list(seen.items()), meta, data.get("bodyClass", "")
+
+
+def merge_found(assets, found, meta_by_url, page):
+    """Merge a page's (found, meta) into the global assets dict."""
+    for url, kind in found:
+        e = assets.setdefault(url, {"kind": kind, "pages": set(), "alt": "", "title": "", "nw": 0, "nh": 0})
+        e["pages"].add(page)
+        m = meta_by_url.get(url) or {}
+        if m.get("alt") and not e["alt"]:
+            e["alt"] = m["alt"]
+        if m.get("title") and not e["title"]:
+            e["title"] = m["title"]
+        if m.get("nw") and not e.get("nw"):
+            e["nw"], e["nh"] = m["nw"], m.get("nh", 0)
+
+
+# --------------------------------------------------------------------------- #
 # Checkpoint (resume after a block/interruption without re-scanning pages)
 # --------------------------------------------------------------------------- #
 def save_manifest(path, assets, page_cms):
@@ -827,6 +919,14 @@ def main():
     ap.add_argument("--throttle", type=float, default=0.0,
                     help="Extra floor on seconds between requests (usually leave 0; --rpm governs)")
     ap.add_argument("--no-download", action="store_true", help="Skip downloads (no px for images)")
+    ap.add_argument("--render", action="store_true",
+                    help="Render each page in a headless browser (Playwright) to catch JS-injected, "
+                         "lazy-loaded and CSS background images, read intrinsic dimensions from the DOM, "
+                         "and record the srcset variant actually served. Needs: pip install playwright "
+                         "&& playwright install chromium. Falls back to static scraping if unavailable.")
+    ap.add_argument("--viewport", default="1440x900",
+                    help="Viewport WxH for --render (default 1440x900); also sets which srcset variant "
+                         "is captured as served.")
     ap.add_argument("--source", choices=["scrape", "auto", "wp-api", "shopify"], default="scrape",
                     help="scrape (default) = crawl pages; auto = use the CMS media API if detected, "
                          "else scrape; wp-api/shopify = force that adapter. API modes pull the CMS "
@@ -839,6 +939,11 @@ def main():
     quiet = args.quiet
     _RATE["interval"] = max(60.0 / max(1, args.rpm), args.throttle)
     log(f"Rate limit: ~{args.rpm} req/min ({_RATE['interval']:.1f}s between requests)", quiet)
+    try:
+        viewport = tuple(int(x) for x in args.viewport.lower().split("x"))
+        assert len(viewport) == 2
+    except (ValueError, AssertionError):
+        viewport = (1440, 900)
 
     # CMS API mode (authoritative library; few requests; no per-page usage)
     if args.source != "scrape":
@@ -892,33 +997,51 @@ def main():
             pages = pages[: args.max_pages]
         log(f"Pages to scan: {len(pages)}", quiet)
 
-        # 2. Extract assets per page
+        # 2. Extract assets per page (static, or headless render with --render)
         failed_pages: list[str] = []
-        for i, page in enumerate(pages, 1):
-            status, headers, body = http_get(page)
-            ctype = headers.get("content-type", "")
-            if not body:
-                failed_pages.append(page)
-                log(f"  [{i}/{len(pages)}] FETCH FAILED ({status or headers.get('_error', '?')}): {page}", quiet)
-                if blocked_too_much():
-                    log("\n*** The server is rate-limiting us (repeated 429/503). Stopping the "
-                        "scan. Resume later with --resume (or lower --rpm). ***", quiet)
-                    break
-                continue
-            if "html" not in ctype:
-                log(f"  [{i}/{len(pages)}] skip (non-HTML, {ctype.split(';')[0]}): {page}", quiet)
-                continue
-            found, meta_by_url, body_class = extract_assets(page, body)
-            page_cms[page] = template_cms_label(body_class)
-            for url, kind in found:
-                entry = assets.setdefault(url, {"kind": kind, "pages": set(), "alt": "", "title": ""})
-                entry["pages"].add(page)
-                m = meta_by_url.get(url) or {}
-                if m.get("alt") and not entry["alt"]:
-                    entry["alt"] = m["alt"]
-                if m.get("title") and not entry["title"]:
-                    entry["title"] = m["title"]
-            log(f"  [{i}/{len(pages)}] {page} -> {len(found)} assets (tot {len(assets)})", quiet)
+        browser_state = start_browser(viewport) if args.render else None
+        if args.render and browser_state is None:
+            log("--render: Playwright not available; using static scraping. "
+                "Install with: pip install playwright && playwright install chromium", quiet)
+        bpage = browser_state[2] if browser_state else None
+        try:
+            for i, page in enumerate(pages, 1):
+                if bpage is not None:
+                    found, meta_by_url, body_class = render_page_assets(bpage, page, quiet)
+                    if not found and not body_class:
+                        failed_pages.append(page)
+                        log(f"  [{i}/{len(pages)}] render failed: {page}", quiet)
+                        time.sleep(_RATE["interval"])
+                        continue
+                    page_cms[page] = template_cms_label(body_class)
+                    merge_found(assets, found, meta_by_url, page)
+                    log(f"  [{i}/{len(pages)}] {page} -> {len(found)} assets (tot {len(assets)})", quiet)
+                    time.sleep(_RATE["interval"])  # polite pacing between page loads
+                    continue
+                status, headers, body = http_get(page)
+                ctype = headers.get("content-type", "")
+                if not body:
+                    failed_pages.append(page)
+                    log(f"  [{i}/{len(pages)}] FETCH FAILED ({status or headers.get('_error', '?')}): {page}", quiet)
+                    if blocked_too_much():
+                        log("\n*** The server is rate-limiting us (repeated 429/503). Stopping the "
+                            "scan. Resume later with --resume (or lower --rpm). ***", quiet)
+                        break
+                    continue
+                if "html" not in ctype:
+                    log(f"  [{i}/{len(pages)}] skip (non-HTML, {ctype.split(';')[0]}): {page}", quiet)
+                    continue
+                found, meta_by_url, body_class = extract_assets(page, body)
+                page_cms[page] = template_cms_label(body_class)
+                merge_found(assets, found, meta_by_url, page)
+                log(f"  [{i}/{len(pages)}] {page} -> {len(found)} assets (tot {len(assets)})", quiet)
+        finally:
+            if browser_state:
+                try:
+                    browser_state[1].close()
+                    browser_state[0].stop()
+                except Exception:
+                    pass
 
         if failed_pages:
             log(f"\n⚠ {len(failed_pages)} pages not fetched.", quiet)
@@ -939,6 +1062,9 @@ def main():
         rec["source_pages"] = meta["pages"]
         rec["alt"] = meta.get("alt", "")
         rec["title"] = meta.get("title", "")
+        # fall back to DOM-intrinsic dimensions (from --render) when probing didn't get them
+        if not rec.get("width_px") and meta.get("nw"):
+            rec["width_px"], rec["height_px"] = meta["nw"], meta.get("nh", "")
         derive_fields(rec)
         pgs = meta["pages"]
         rec["template_url"] = ", ".join(sorted({template_of(p) for p in pgs}))

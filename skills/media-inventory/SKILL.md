@@ -37,7 +37,7 @@ plus a readable `inventory.md` with a summary.
 
    ```bash
    python3 scripts/inventory.py --url <URL> [--site | --pages URL... | --pages-file F] \
-       --out <DIR> [--max-pages N] [--rpm 25] [--resume] [--source auto]
+       --out <DIR> [--max-pages N] [--rpm 25] [--resume] [--source auto] [--render]
    ```
 
    It probes dimensions with `sips` (macOS native; `identify`/ImageMagick as
@@ -102,9 +102,14 @@ while still listing every size that's actually served.
   reuse the cached downloads — only the not-yet-probed assets are fetched. Combine
   with **`--pages-file`** (one URL per line) for big explicit page lists. Outputs
   (CSV/MD) are written even on early abort, so a resumed run completes the rest.
-- **JS-only sites (SPA)**: if the static pass finds almost nothing, the page is
-  likely client-rendered — use the browser pass, or Firecrawl. See
-  `references/firecrawl-fallback.md`.
+- **JS-only sites (SPA) / lazy-load / CSS backgrounds**: if the static pass finds
+  almost nothing, the page is likely client-rendered — add **`--render`** (headless
+  Playwright). It captures JS-injected, lazy-loaded and CSS background images, reads
+  intrinsic dimensions straight from the DOM (`naturalWidth/Height`, so even
+  non-downloaded assets get sizes), and records `img.currentSrc` (the srcset variant
+  actually served at `--viewport`). Needs `pip install playwright && playwright
+  install chromium`; falls back to static scraping if unavailable. Alternatively use
+  Firecrawl — see `references/firecrawl-fallback.md`.
 - **Firecrawl**: optional fallback only. Never use a Gemini/Google backend;
   Firecrawl with its own API key is fine.
 - **Dependencies**: `sips` ships with macOS; `ffprobe` via `brew install ffmpeg`;

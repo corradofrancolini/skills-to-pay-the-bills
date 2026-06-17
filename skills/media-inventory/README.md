@@ -101,6 +101,8 @@ python3 scripts/inventory.py --url https://example.com/ --site --resume --out ./
 | `--throttle S` | 0 | Extra floor on seconds between requests (usually leave 0; `--rpm` governs). |
 | `--resume` | off | Resume from `.manifest.json` in `--out`: skip page scanning, reuse cached downloads. |
 | `--source MODE` | `scrape` | `scrape` (crawl pages) · `auto` (use the CMS media API if detected, else scrape) · `wp-api` / `shopify` (force that adapter). See below. |
+| `--render` | off | Render each page in headless Chromium (Playwright) — captures JS/lazy/CSS-background media, DOM dimensions, and the served srcset variant. See below. |
+| `--viewport WxH` | `1440x900` | Viewport for `--render` (also sets which srcset variant counts as served). |
 | `--no-download` | off | Skip downloads (no pixel dimensions for images). |
 | `--quiet` | off | Suppress progress logging. |
 
@@ -124,6 +126,28 @@ Adapters (CMS-agnostic framework — add more by registering in `ADAPTERS`):
 - **WordPress** — `/wp-json/wp/v2/media` (paginated): `source_url`, dimensions, `mime_type`, `alt_text`, `date`.
 - **Shopify** — public `products.json`: product images with dimensions + `created_at`.
 - **`auto`** detects the CMS from `<meta generator>` / headers and **falls back to scraping** if no adapter applies. Drupal/Ghost and others can be added the same way.
+
+---
+
+## Headless render mode (`--render`)
+
+Static HTML parsing misses media injected by JS, some lazy-loaded images, and CSS
+`background-image`. `--render` loads each page in **headless Chromium (Playwright)**,
+auto-scrolls to trigger lazy-loading, and reads assets from the **live DOM**:
+
+- catches **JS-injected / lazy / CSS-background** media the static parser can't see;
+- reads **intrinsic dimensions from the DOM** (`naturalWidth/Height`) — so assets get
+  sizes even with `--no-download`;
+- records **`img.currentSrc`** — the **srcset variant actually served** at `--viewport`
+  (e.g. `--viewport 375x812` to see what mobile gets).
+
+```bash
+python3 scripts/inventory.py --url https://example.com/ --site --render --out ./out
+```
+
+Optional dependency: `pip install playwright && playwright install chromium`. If it's
+not installed, the skill prints how to install it and **falls back to static scraping**.
+Render mode loads full pages (more requests than static), so keep `--rpm` polite.
 
 ---
 

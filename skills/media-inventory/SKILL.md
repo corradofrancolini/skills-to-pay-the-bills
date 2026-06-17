@@ -37,7 +37,7 @@ plus a readable `inventory.md` with a summary.
 
    ```bash
    python3 scripts/inventory.py --url <URL> [--site | --pages URL... | --pages-file F] \
-       --out <DIR> [--max-pages N] [--rpm 25] [--resume]
+       --out <DIR> [--max-pages N] [--rpm 25] [--resume] [--source auto]
    ```
 
    It probes dimensions with `sips` (macOS native; `identify`/ImageMagick as

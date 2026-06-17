@@ -100,8 +100,30 @@ python3 scripts/inventory.py --url https://example.com/ --site --resume --out ./
 | `--rpm N` | 30 | Max requests/minute (global, pages **and** assets). Keep low (20–30) on WAF-protected sites. |
 | `--throttle S` | 0 | Extra floor on seconds between requests (usually leave 0; `--rpm` governs). |
 | `--resume` | off | Resume from `.manifest.json` in `--out`: skip page scanning, reuse cached downloads. |
+| `--source MODE` | `scrape` | `scrape` (crawl pages) · `auto` (use the CMS media API if detected, else scrape) · `wp-api` / `shopify` (force that adapter). See below. |
 | `--no-download` | off | Skip downloads (no pixel dimensions for images). |
 | `--quiet` | off | Suppress progress logging. |
+
+---
+
+## CMS API mode (`--source`)
+
+On a supported CMS, instead of crawling every page you can pull the **authoritative
+media library** straight from the CMS API. This gives **reliable `upload_date`,
+`alt` and dimensions**, uses **far fewer requests** (so it sidesteps WAF/Wordfence
+rate-limits), and is much faster. Trade-off: it lists the *library*, not per-page
+**usage** — so there's no `template`/`source_pages` data (use plain `scrape` for that).
+
+```bash
+python3 scripts/inventory.py --url https://example.com/ --source auto   --out ./out
+python3 scripts/inventory.py --url https://example.com/ --source wp-api  --out ./out
+```
+
+Adapters (CMS-agnostic framework — add more by registering in `ADAPTERS`):
+
+- **WordPress** — `/wp-json/wp/v2/media` (paginated): `source_url`, dimensions, `mime_type`, `alt_text`, `date`.
+- **Shopify** — public `products.json`: product images with dimensions + `created_at`.
+- **`auto`** detects the CMS from `<meta generator>` / headers and **falls back to scraping** if no adapter applies. Drupal/Ghost and others can be added the same way.
 
 ---
 

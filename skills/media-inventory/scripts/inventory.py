@@ -547,8 +547,29 @@ def probe_asset(url: str, kind_hint: str, out_dir: str, download: bool, quiet: b
 # --------------------------------------------------------------------------- #
 CSV_FIELDS = ["asset_url", "type", "format", "mime", "width_px", "height_px",
               "aspect_ratio", "orientation", "weight_kb", "duration_s",
-              "is_variant", "group", "alt", "title",
+              "is_variant", "group", "alt", "title", "upload_date",
               "template_url", "template_cms", "source_pages", "notes"]
+
+
+def derive_fields(rec: dict) -> dict:
+    """Fill aspect_ratio, orientation and group from width/height + asset_url.
+    Shared by the scraping path and the CMS-API adapters."""
+    try:
+        w = float(rec.get("width_px") or 0)
+        h = float(rec.get("height_px") or 0)
+    except (TypeError, ValueError):
+        w = h = 0
+    if w and h:
+        ratio = w / h
+        rec["aspect_ratio"] = round(ratio, 2)
+        rec["orientation"] = ("square" if 0.95 <= ratio <= 1.05
+                              else "landscape" if ratio > 1 else "portrait")
+    else:
+        rec["aspect_ratio"] = rec.get("aspect_ratio", "") or ""
+        rec["orientation"] = rec.get("orientation", "") or ""
+    fname = urlparse(rec.get("asset_url", "")).path.rsplit("/", 1)[-1]
+    rec["group"] = re.sub(r"\.\w+$", "", VARIANT_RE.sub("", fname))
+    return rec
 
 
 def write_csv(path: str, records: list[dict]):
@@ -586,7 +607,10 @@ def write_md(path: str, records: list[dict], target: str, n_pages: int, page_cms
 
     lines = []
     lines.append(f"# Media inventory — {target}\n")
-    lines.append(f"- Pages analyzed: **{n_pages}**")
+    if n_pages:
+        lines.append(f"- Pages analyzed: **{n_pages}**")
+    else:
+        lines.append("- Source: **CMS media library (API)**")
     lines.append(f"- Total assets (unique): **{len(records)}** "
                  f"({n_img} images/SVG, {n_vid} videos, {n_novar} non-variant)")
     lines.append(f"- Total asset weight: **{total_kb/1024:.1f} MB**")
@@ -604,8 +628,10 @@ def write_md(path: str, records: list[dict], target: str, n_pages: int, page_cms
             row = " | ".join(str(counts.get(f, 0)) for f in fmts)
             lines.append(f"| {g} | {row} | {sum(counts.values())} |")
 
-    matrix("Formats by template (from URL)", per_template, "Template URL")
-    matrix("Formats by template (from CMS / body class)", per_template_cms, "Template CMS")
+    if per_template:
+        matrix("Formats by template (from URL)", per_template, "Template URL")
+    if per_template_cms:
+        matrix("Formats by template (from CMS / body class)", per_template_cms, "Template CMS")
 
     lines.append("\n## Top 10 heaviest assets\n")
     lines.append("| Weight (KB) | Type | Dimensions | URL |")
@@ -630,6 +656,138 @@ def write_md(path: str, records: list[dict], target: str, n_pages: int, page_cms
 
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
+
+
+# --------------------------------------------------------------------------- #
+# CMS API adapters
+# Pull the authoritative media library from a CMS API instead of scraping:
+# reliable upload_date / alt / dimensions, far fewer requests (avoids WAF blocks).
+# Trade-off: gives the library, not per-page usage (no template/source-page data).
+# Each adapter returns a list of records in the CSV_FIELDS shape; the framework
+# is CMS-agnostic — add an adapter and register it in ADAPTERS.
+# --------------------------------------------------------------------------- #
+def _site_root(url: str) -> str:
+    p = urlparse(url)
+    return f"{p.scheme}://{p.netloc}"
+
+
+def detect_cms(base_url: str, quiet: bool = False):
+    """Best-effort CMS detection from <meta generator>, headers, and telltales."""
+    status, headers, body = http_get(base_url)
+    html = body.decode("utf-8", "ignore") if body else ""
+    gen = ""
+    m = re.search(r'<meta[^>]+name=["\']generator["\'][^>]+content=["\']([^"\']+)', html, re.I)
+    if m:
+        gen = m.group(1).lower()
+    blob = " ".join([gen, (headers.get("x-powered-by", "") or "").lower(), html[:8000].lower()])
+    if "wordpress" in gen or "/wp-json/" in html or "/wp-content/" in html:
+        return "wordpress"
+    if "shopify" in blob or "cdn.shopify.com" in html:
+        return "shopify"
+    if "drupal" in gen or "drupal-settings-json" in html:
+        return "drupal"
+    if "ghost" in gen:
+        return "ghost"
+    return None
+
+
+def _api_record(url: str, mime: str = "") -> dict:
+    return {"asset_url": url, "type": classify(url, mime, ""), "format": ext_of(url),
+            "mime": mime, "width_px": "", "height_px": "", "weight_kb": "", "duration_s": "",
+            "is_variant": bool(VARIANT_RE.search(urlparse(url).path)), "alt": "", "title": "",
+            "upload_date": "", "source_pages": "", "template_url": "", "template_cms": "", "notes": ""}
+
+
+def wp_media_records(base_url: str, quiet: bool) -> list[dict]:
+    """WordPress REST API: /wp-json/wp/v2/media (paginated)."""
+    root = _site_root(base_url)
+    recs, page = [], 1
+    while True:
+        api = urljoin(root, f"/wp-json/wp/v2/media?per_page=100&page={page}"
+                            "&_fields=source_url,mime_type,media_details,alt_text,title,date")
+        status, headers, body = http_get(api)
+        if not body or (status and status >= 400):
+            break
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            break
+        if not isinstance(data, list) or not data:
+            break
+        for it in data:
+            url = it.get("source_url") or ""
+            if not url:
+                continue
+            rec = _api_record(url, (it.get("mime_type") or ""))
+            md = it.get("media_details") or {}
+            if md.get("width"):
+                rec["width_px"] = md["width"]
+            if md.get("height"):
+                rec["height_px"] = md["height"]
+            rec["alt"] = (it.get("alt_text") or "").strip()
+            rec["title"] = re.sub("<[^>]+>", "", ((it.get("title") or {}).get("rendered") or "")).strip()
+            rec["upload_date"] = (it.get("date") or "")[:10]
+            rec["notes"] = "from WP REST API"
+            recs.append(derive_fields(rec))
+        total = int(headers.get("x-wp-totalpages", "0") or 0)
+        log(f"  WP media: page {page}/{total or '?'} ({len(recs)} items)", quiet)
+        if not total or page >= total:
+            break
+        page += 1
+    return recs
+
+
+def shopify_records(base_url: str, quiet: bool) -> list[dict]:
+    """Shopify public products.json → product images (with dimensions + created_at)."""
+    root = _site_root(base_url)
+    recs, page, seen = [], 1, set()
+    while True:
+        api = urljoin(root, f"/products.json?limit=250&page={page}")
+        status, headers, body = http_get(api)
+        if not body or (status and status >= 400):
+            break
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            break
+        products = data.get("products") if isinstance(data, dict) else None
+        if not products:
+            break
+        for p in products:
+            ptitle = p.get("title") or ""
+            for img in (p.get("images") or []):
+                url = (img.get("src") or "").split("?")[0]
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                rec = _api_record(url)
+                if img.get("width"):
+                    rec["width_px"] = img["width"]
+                if img.get("height"):
+                    rec["height_px"] = img["height"]
+                rec["alt"] = (img.get("alt") or ptitle or "").strip()
+                rec["upload_date"] = (img.get("created_at") or "")[:10]
+                rec["notes"] = "from Shopify products.json"
+                recs.append(derive_fields(rec))
+        log(f"  Shopify: page {page} ({len(recs)} images)", quiet)
+        if len(products) < 250:
+            break
+        page += 1
+    return recs
+
+
+ADAPTERS = {"wordpress": wp_media_records, "shopify": shopify_records}
+
+
+def inventory_via_api(base_url: str, source: str, quiet: bool):
+    """source: a CMS name in ADAPTERS, or 'auto' to detect. Returns records or None."""
+    cms = source if source in ADAPTERS else detect_cms(base_url, quiet)
+    if cms not in ADAPTERS:
+        log(f"API mode: no supported CMS adapter (detected: {cms or 'unknown'}). "
+            "Supported: " + ", ".join(ADAPTERS), quiet)
+        return None
+    log(f"API mode: using the '{cms}' adapter (CMS media library).", quiet)
+    return ADAPTERS[cms](base_url, quiet) or None
 
 
 # --------------------------------------------------------------------------- #
@@ -669,6 +827,11 @@ def main():
     ap.add_argument("--throttle", type=float, default=0.0,
                     help="Extra floor on seconds between requests (usually leave 0; --rpm governs)")
     ap.add_argument("--no-download", action="store_true", help="Skip downloads (no px for images)")
+    ap.add_argument("--source", choices=["scrape", "auto", "wp-api", "shopify"], default="scrape",
+                    help="scrape (default) = crawl pages; auto = use the CMS media API if detected, "
+                         "else scrape; wp-api/shopify = force that adapter. API modes pull the CMS "
+                         "media library (reliable upload_date/alt/dimensions, far fewer requests → "
+                         "avoids WAF blocks) but yield no per-page usage/template data.")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -676,6 +839,23 @@ def main():
     quiet = args.quiet
     _RATE["interval"] = max(60.0 / max(1, args.rpm), args.throttle)
     log(f"Rate limit: ~{args.rpm} req/min ({_RATE['interval']:.1f}s between requests)", quiet)
+
+    # CMS API mode (authoritative library; few requests; no per-page usage)
+    if args.source != "scrape":
+        src = {"wp-api": "wordpress", "shopify": "shopify", "auto": "auto"}[args.source]
+        api_records = inventory_via_api(args.url, src, quiet)
+        if api_records:
+            csv_path = os.path.join(args.out, "inventory.csv")
+            md_path = os.path.join(args.out, "inventory.md")
+            write_csv(csv_path, api_records)
+            write_md(md_path, api_records, args.url, 0, {})  # n_pages=0 -> "CMS media library"
+            log(f"\nDone (CMS API). {len(api_records)} assets.", quiet)
+            print(f"CSV: {csv_path}")
+            print(f"MD:  {md_path}")
+            return
+        if args.source != "auto":
+            log("Requested API source unavailable — falling back to scraping.", quiet)
+        # auto, or forced adapter that returned nothing -> fall through to scraping
 
     manifest_path = os.path.join(args.out, ".manifest.json")
     assets: dict[str, dict] = {}   # url -> {kind, pages:set, alt, title}
@@ -759,23 +939,7 @@ def main():
         rec["source_pages"] = meta["pages"]
         rec["alt"] = meta.get("alt", "")
         rec["title"] = meta.get("title", "")
-        # derived fields
-        try:
-            w = float(rec.get("width_px") or 0)
-            h = float(rec.get("height_px") or 0)
-        except ValueError:
-            w = h = 0
-        if w and h:
-            ratio = w / h
-            rec["aspect_ratio"] = round(ratio, 2)
-            rec["orientation"] = ("square" if 0.95 <= ratio <= 1.05
-                                  else "landscape" if ratio > 1 else "portrait")
-        else:
-            rec["aspect_ratio"] = ""
-            rec["orientation"] = ""
-        fname = urlparse(url).path.rsplit("/", 1)[-1]
-        stem = VARIANT_RE.sub("", fname)
-        rec["group"] = re.sub(r"\.\w+$", "", stem)
+        derive_fields(rec)
         pgs = meta["pages"]
         rec["template_url"] = ", ".join(sorted({template_of(p) for p in pgs}))
         rec["template_cms"] = ", ".join(sorted({page_cms.get(p, "?") for p in pgs}))

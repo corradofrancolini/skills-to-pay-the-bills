@@ -835,7 +835,46 @@ def shopify_records(base_url: str, quiet: bool) -> list[dict]:
     return recs
 
 
-ADAPTERS = {"wordpress": wp_media_records, "shopify": shopify_records}
+def payload_records(base_url: str, quiet: bool, collection: str = "media") -> list[dict]:
+    """Payload CMS REST API: /api/<upload-collection> (default 'media'), paginated.
+    Gives url, dimensions, mimeType, alt, createdAt and filesize (→ weight, for free)."""
+    root = _site_root(base_url)
+    recs, page = [], 1
+    while True:
+        api = urljoin(root, f"/api/{collection}?limit=100&page={page}&depth=0")
+        status, headers, body = http_get(api)
+        if not body or (status and status >= 400):
+            break
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            break
+        docs = data.get("docs") if isinstance(data, dict) else None
+        if not docs:
+            break
+        for d in docs:
+            raw = d.get("url") or (f"/{collection}/{d['filename']}" if d.get("filename") else "")
+            if not raw:
+                continue
+            rec = _api_record(urljoin(root, raw), (d.get("mimeType") or ""))
+            if d.get("width"):
+                rec["width_px"] = d["width"]
+            if d.get("height"):
+                rec["height_px"] = d["height"]
+            if d.get("filesize"):
+                rec["weight_kb"] = round(int(d["filesize"]) / 1024, 1)
+            rec["alt"] = (d.get("alt") or "").strip() if isinstance(d.get("alt"), str) else ""
+            rec["upload_date"] = (d.get("createdAt") or "")[:10]
+            rec["notes"] = "from Payload REST API"
+            recs.append(derive_fields(rec))
+        log(f"  Payload media: page {page}/{data.get('totalPages', '?')} ({len(recs)} items)", quiet)
+        if not data.get("hasNextPage"):
+            break
+        page += 1
+    return recs
+
+
+ADAPTERS = {"wordpress": wp_media_records, "shopify": shopify_records, "payload": payload_records}
 
 
 def inventory_via_api(base_url: str, source: str, quiet: bool):
@@ -986,7 +1025,7 @@ def main():
     ap.add_argument("--viewport", default="1440x900",
                     help="Viewport WxH for --render (default 1440x900); also sets which srcset variant "
                          "is captured as served.")
-    ap.add_argument("--source", choices=["scrape", "auto", "wp-api", "shopify"], default="scrape",
+    ap.add_argument("--source", choices=["scrape", "auto", "wp-api", "shopify", "payload"], default="scrape",
                     help="scrape (default) = crawl pages; auto = use the CMS media API if detected, "
                          "else scrape; wp-api/shopify = force that adapter. API modes pull the CMS "
                          "media library (reliable upload_date/alt/dimensions, far fewer requests → "
@@ -1006,7 +1045,7 @@ def main():
 
     # CMS API mode (authoritative library; few requests; no per-page usage)
     if args.source != "scrape":
-        src = {"wp-api": "wordpress", "shopify": "shopify", "auto": "auto"}[args.source]
+        src = {"wp-api": "wordpress", "shopify": "shopify", "payload": "payload", "auto": "auto"}[args.source]
         api_records = inventory_via_api(args.url, src, quiet)
         if api_records:
             csv_path = os.path.join(args.out, "inventory.csv")

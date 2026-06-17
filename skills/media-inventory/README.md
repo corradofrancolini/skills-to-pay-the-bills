@@ -105,7 +105,7 @@ python3 scripts/inventory.py --url https://example.com/ --site --resume --out ./
 | `--rpm N` | 30 | Max requests/minute (global, pages **and** assets). Keep low (20–30) on WAF-protected sites. |
 | `--throttle S` | 0 | Extra floor on seconds between requests (usually leave 0; `--rpm` governs). |
 | `--resume` | off | Resume from `.manifest.json` in `--out`: skip page scanning, reuse cached downloads. |
-| `--source MODE` | `scrape` | `scrape` (crawl pages) · `auto` (use the CMS media API if detected, else scrape) · `wp-api` / `shopify` (force that adapter). See below. |
+| `--source MODE` | `scrape` | `scrape` (crawl pages) · `auto` (use the CMS media API if detected, else scrape) · `wp-api` / `shopify` / `payload` (force that adapter). See below. |
 | `--render` | off | Render each page in headless Chromium (Playwright) — captures JS/lazy/CSS-background media, DOM dimensions, and the served srcset variant. See below. |
 | `--viewport WxH` | `1440x900` | Viewport for `--render` (also sets which srcset variant counts as served). |
 | `--no-download` | off | Skip downloads (no pixel dimensions for images). |
@@ -130,6 +130,7 @@ Adapters (CMS-agnostic framework — add more by registering in `ADAPTERS`):
 
 - **WordPress** — `/wp-json/wp/v2/media` (paginated): `source_url`, dimensions, `mime_type`, `alt_text`, `date`.
 - **Shopify** — public `products.json`: product images with dimensions + `created_at`.
+- **Payload** — `/api/media` (paginated): `url`, dimensions, `mimeType`, `alt`, `createdAt`, and `filesize` (so weight comes for free). Use `--source payload` (Payload is headless, so `auto` can't sniff it from HTML).
 - **`auto`** detects the CMS from `<meta generator>` / headers and **falls back to scraping** if no adapter applies. Drupal/Ghost and others can be added the same way.
 
 ---

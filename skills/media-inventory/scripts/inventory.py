@@ -419,6 +419,64 @@ def identify_dims(path: str):
     return None
 
 
+def image_dims(data: bytes):
+    """Pure-Python intrinsic dimensions by parsing file headers. No external tools,
+    cross-platform. Handles PNG/JPEG/GIF/BMP/WebP/AVIF-HEIF/ICO. Returns (w, h, fmt)
+    or None (then sips/identify can still be tried as a fallback)."""
+    if not data or len(data) < 24:
+        return None
+    try:
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big"), "png"
+        if data[:6] in (b"GIF87a", b"GIF89a"):
+            return int.from_bytes(data[6:8], "little"), int.from_bytes(data[8:10], "little"), "gif"
+        if data[:2] == b"\xff\xd8":  # JPEG: scan for a SOF marker
+            i, n = 2, len(data)
+            while i + 9 < n:
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker == 0xD8 or marker == 0xD9 or 0xD0 <= marker <= 0xD7:
+                    i += 2
+                    continue
+                seg = int.from_bytes(data[i + 2:i + 4], "big")
+                if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                    return (int.from_bytes(data[i + 7:i + 9], "big"),
+                            int.from_bytes(data[i + 5:i + 7], "big"), "jpeg")
+                i += 2 + seg
+            return None
+        if data[:2] == b"BM":
+            return (int.from_bytes(data[18:22], "little"),
+                    abs(int.from_bytes(data[22:26], "little", signed=True)), "bmp")
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            chunk = data[12:16]
+            if chunk == b"VP8 " and data[23:26] == b"\x9d\x01\x2a":
+                return (int.from_bytes(data[26:28], "little") & 0x3FFF,
+                        int.from_bytes(data[28:30], "little") & 0x3FFF, "webp")
+            if chunk == b"VP8L" and data[20] == 0x2F:
+                b = int.from_bytes(data[21:25], "little")
+                return ((b & 0x3FFF) + 1, ((b >> 14) & 0x3FFF) + 1, "webp")
+            if chunk == b"VP8X":
+                return (int.from_bytes(data[24:27], "little") + 1,
+                        int.from_bytes(data[27:30], "little") + 1, "webp")
+            return None
+        if data[4:8] == b"ftyp":  # ISO-BMFF: AVIF / HEIF — read the 'ispe' box
+            j = data.find(b"ispe")
+            if j != -1 and j + 16 <= len(data):
+                w = int.from_bytes(data[j + 8:j + 12], "big")
+                h = int.from_bytes(data[j + 12:j + 16], "big")
+                if w and h:
+                    fmt = "avif" if b"avif" in data[:32] else "heif"
+                    return w, h, fmt
+            return None
+        if data[:4] in (b"\x00\x00\x01\x00", b"\x00\x00\x02\x00"):  # ICO/CUR
+            return (data[6] or 256), (data[7] or 256), "ico"
+    except Exception:
+        return None
+    return None
+
+
 def svg_dims(body: bytes):
     try:
         el = ET.fromstring(body)
@@ -532,7 +590,8 @@ def probe_asset(url: str, kind_hint: str, out_dir: str, download: bool, quiet: b
         dims = svg_dims(body)
         rec["type"] = "svg"
     else:
-        dims = sips_dims(cpath) or identify_dims(cpath)
+        # pure-Python header parse first (cross-platform, no tools); sips/identify fallback
+        dims = image_dims(body) or sips_dims(cpath) or identify_dims(cpath)
     if dims:
         rec["width_px"], rec["height_px"] = dims[0], dims[1]
         if dims[2]:

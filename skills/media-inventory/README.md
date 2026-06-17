@@ -61,11 +61,16 @@ template_url, template_cms, source_pages, notes`
 
 ## Requirements
 
-- **Python 3** (standard library only — no `pip install`).
-- **`sips`** — ships with macOS (image dimensions). Fallback: **ImageMagick** `identify`.
-- **`ffprobe`** (`brew install ffmpeg`) — video dimensions/duration (read remotely; videos are not fully downloaded).
+- **Python 3** (standard library only — no `pip install` for the core).
+- **Image dimensions: none.** Read **pure-Python** by parsing file headers
+  (PNG/JPEG/GIF/BMP/WebP/AVIF-HEIF/ICO; SVG via XML) — works on macOS, Linux and
+  Windows out of the box. `sips` (macOS) and ImageMagick `identify` are used only as
+  optional fallbacks for exotic formats.
+- **`ffprobe`** (`brew install ffmpeg`) — only for **video** dimensions/duration
+  (read remotely; videos are not fully downloaded). Optional.
+- **Playwright** — only for `--render` (`pip install playwright && playwright install chromium`). Optional.
 
-The script degrades gracefully and notes in the `notes` column when a tool is missing.
+The script degrades gracefully and notes in the `notes` column when something can't be probed.
 
 ---
 

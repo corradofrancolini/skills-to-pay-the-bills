@@ -112,6 +112,8 @@ while still listing every size that's actually served.
   Firecrawl — see `references/firecrawl-fallback.md`.
 - **Firecrawl**: optional fallback only. Never use a Gemini/Google backend;
   Firecrawl with its own API key is fine.
-- **Dependencies**: `sips` ships with macOS; `ffprobe` via `brew install ffmpeg`;
-  `identify` via ImageMagick (optional fallback). The script degrades gracefully
-  and notes in the `notes` column when a probe tool is missing.
+- **Dependencies**: image dimensions are read **pure-Python** (header parsing for
+  PNG/JPEG/GIF/BMP/WebP/AVIF-HEIF/ICO; SVG via XML) — cross-platform, no tools needed.
+  `sips`/`identify` are only optional fallbacks for exotic formats; `ffprobe` is only
+  for video; Playwright only for `--render`. The script degrades gracefully and notes
+  in the `notes` column when something can't be probed.

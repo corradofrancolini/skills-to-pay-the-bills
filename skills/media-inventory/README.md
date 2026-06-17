@@ -10,6 +10,29 @@ WAF/Wordfence rate-limits, clean abort, and **resume from a checkpoint**.
 
 ---
 
+## How to use it (just ask Claude)
+
+This is a **Claude Code skill** — you don't run anything yourself. Describe what you
+want in natural language: the skill triggers automatically (no command to type), and
+Claude runs the pipeline and hands you the CSV + summary. Example prompts:
+
+- "Fammi un **inventario** delle immagini e dei video di `https://www.example.com` — dimensioni, formato e peso, in CSV."
+- "**Quanto pesano** le immagini della homepage di example.com? Quali sono troppo grandi?"
+- "**Censisci tutti i media** del sito example.com (tutte le pagine) e dimmi quali formati sono usati in quale tipo di pagina."
+- "Inventory every image on `example.com/blog` and **flag the ones over 500 KB**."
+- "**Audit the media** of this site before the redesign: list assets with width×height, format, and which template uses them."
+
+You can steer it in plain language too:
+
+- "vai piano, il sito ha Wordfence" → lower request rate (`--rpm`)
+- "solo queste 5 pagine" / "tutto il sito" → explicit pages vs `--site`
+- "riprendi da dove eri" → resume from the checkpoint (`--resume`)
+
+The CLI below is simply **what Claude runs under the hood** — handy if you ever want
+to run it manually or in a script.
+
+---
+
 ## What it produces
 
 In the `--out` directory:
@@ -46,7 +69,9 @@ The script degrades gracefully and notes in the `note` column when a tool is mis
 
 ---
 
-## Usage
+## Running the pipeline directly (CLI)
+
+*(What the skill runs for you — also usable standalone.)*
 
 ```bash
 # single page

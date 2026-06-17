@@ -39,20 +39,20 @@ In the `--out` directory:
 
 | File | Contents |
 |------|----------|
-| `inventario.csv` | One row per **unique asset**, all columns (see below). |
-| `inventario.md` | Summary: counts per format, **format × template** matrices (URL & CMS), heaviest assets, images missing dimensions. |
-| `formati_per_template.csv` / `_cms.csv` / `formati_per_pagina.csv` | Cross-tabs: which formats are used in which template / page (counts = asset×page occurrences). |
+| `inventory.csv` | One row per **unique asset**, all columns (see below). |
+| `inventory.md` | Summary: counts per format, **format × template** matrices (URL & CMS), heaviest assets, images missing dimensions. |
+| `formats_by_template.csv` / `_cms.csv` / `formats_by_page.csv` | Cross-tabs: which formats are used in which template / page (counts = asset×page occurrences). |
 | `.cache/` | Downloaded asset bytes (so re-runs skip downloads). |
 | `.manifest.json` | Phase-1 checkpoint (enables `--resume`). |
 
 ### CSV columns
 
-`asset_url, tipo (image/video/svg), formato, mime, larghezza_px, altezza_px,
-aspect_ratio, orientamento, peso_kb, durata_s, is_variant, gruppo, alt, title,
-template_url, template_cms, pagine_origine, note`
+`asset_url, type (image/video/svg), format, mime, width_px, height_px,
+aspect_ratio, orientation, weight_kb, duration_s, is_variant, group, alt, title,
+template_url, template_cms, source_pages, notes`
 
-- **`aspect_ratio` / `orientamento`** — derived from width×height.
-- **`is_variant` / `gruppo`** — `is_variant` flags CMS-generated sizes (`-1024x683.jpg`); `gruppo` is the source stem so originals and their variants cluster.
+- **`aspect_ratio` / `orientation`** — derived from width×height (landscape/portrait/square).
+- **`is_variant` / `group`** — `is_variant` flags CMS-generated sizes (`-1024x683.jpg`); `group` is the source stem so originals and their variants cluster.
 - **`alt` / `title`** — from the `<img>` tag (accessibility/SEO; content to migrate).
 - **`template_url`** — page type from the URL (first path segment after the locale: `products`, `recipes`, `home`…).
 - **`template_cms`** — real page type from the WordPress `<body class>` (`single:product`, `category:…`, `tax:…`) — more precise than the URL heuristic.
@@ -65,7 +65,7 @@ template_url, template_cms, pagine_origine, note`
 - **`sips`** — ships with macOS (image dimensions). Fallback: **ImageMagick** `identify`.
 - **`ffprobe`** (`brew install ffmpeg`) — video dimensions/duration (read remotely; videos are not fully downloaded).
 
-The script degrades gracefully and notes in the `note` column when a tool is missing.
+The script degrades gracefully and notes in the `notes` column when a tool is missing.
 
 ---
 
@@ -136,6 +136,22 @@ On a site you control, the fastest path is to **allowlist your IP in Wordfence**
 - Responsive `srcset` "variant actually served" needs a real browser per breakpoint.
 
 ---
+
+## Responsible use
+
+This tool fetches publicly served pages and media. Use it responsibly:
+
+- **Only on sites you own or are authorized to audit** (your own properties, or a
+  client engagement with permission). It's a media audit tool, not a bulk scraper.
+- **Respect `robots.txt`, Terms of Service, and rate limits.** The skill is polite
+  by design (global `--rpm` limiter, backoff, clean abort) — keep it that way; don't
+  crank `--rpm` to hammer a site.
+- **Don't evade blocks.** If a site rate-limits you (e.g. Wordfence 503), slow down,
+  resume later, or get the owner to allowlist you / raise the limit — don't rotate
+  IPs or distribute requests to get around a site's own protections.
+- **Respect copyright.** Downloaded bytes are cached locally only to measure
+  dimensions/weight; the assets remain their owners' property.
+- **Read-only.** The tool only issues GET/HEAD requests; it never modifies the site.
 
 ## Files
 

@@ -16,15 +16,15 @@ standard on macOS / common elsewhere:
   - SVG:     parsed as XML (width/height/viewBox)
 
 Usage:
-  inventory.py --url URL [--site | --pages URL ...] [--out DIR]
-               [--max-pages N] [--throttle SEC] [--no-download] [--quiet]
+  inventory.py --url URL [--site | --pages URL ... | --pages-file F] [--out DIR]
+               [--max-pages N] [--rpm N] [--resume] [--no-download] [--quiet]
 
 Examples:
   # single page
   inventory.py --url https://example.com/
 
-  # whole site via sitemap (fallback: internal link crawl)
-  inventory.py --url https://example.com/ --site --max-pages 50 --out ./out
+  # whole site via sitemap (fallback: internal link crawl), politely paced
+  inventory.py --url https://example.com/ --site --rpm 25 --out ./out
 """
 
 from __future__ import annotations
@@ -183,8 +183,7 @@ def discover_via_sitemap(base_url: str, quiet: bool) -> list[str]:
                     pages.append(url_el.text.strip())
         log(f"  sitemap {sm}: total pages so far {len(set(pages))}", quiet)
 
-    # keep only same-host HTML-ish URLs (drop direct image/video locs here;
-    # they will be re-discovered per page, but we keep them too as extra hints)
+    # keep only same-host URLs
     host = parsed.netloc
     out = [u for u in dict.fromkeys(pages) if urlparse(u).netloc == host]
     return out
@@ -315,8 +314,8 @@ def classify(url: str, mime: str, hint: str) -> str:
 
 def template_of(url: str) -> str:
     """Heuristic page-template label from the URL path: the first path segment
-    after an optional 2-letter locale (e.g. /it/ricette/... -> 'ricette',
-    /it/ -> 'home'). Site-agnostic; works well for CMS path conventions."""
+    after an optional 2-letter locale (e.g. /en/recipes/... -> 'recipes',
+    /en/ -> 'home'). CMS-agnostic; works well for common path conventions."""
     parts = [p for p in urlparse(url).path.strip("/").split("/") if p]
     if parts and len(parts[0]) == 2:  # drop locale like 'it', 'en'
         parts = parts[1:]
@@ -324,9 +323,10 @@ def template_of(url: str) -> str:
 
 
 def template_cms_label(class_str: str) -> str:
-    """Derive the real WordPress template/page-type from the <body class>.
-    More accurate than the URL heuristic: distinguishes single vs archive,
-    custom post types, page templates, taxonomies."""
+    """Derive the page-type from the WordPress <body class>. More precise than the
+    URL heuristic: distinguishes single vs archive, custom post types, page
+    templates, taxonomies. On non-WordPress sites it degrades to the first class
+    (the URL template always remains as a CMS-agnostic fallback)."""
     classes = (class_str or "").split()
     cset = set(classes)
     for c in classes:
@@ -361,9 +361,9 @@ def format_breakdown(records, page_cms=None):
     per_page: dict[str, dict[str, int]] = {}
     formats: set[str] = set()
     for r in records:
-        fmt = (r.get("formato") or "?").lower()
+        fmt = (r.get("format") or "?").lower()
         formats.add(fmt)
-        pages = r.get("pagine_origine") or []
+        pages = r.get("source_pages") or []
         if isinstance(pages, str):
             pages = [p.strip() for p in pages.split("|") if p.strip()]
         for p in pages:
@@ -378,7 +378,7 @@ def format_breakdown(records, page_cms=None):
 def write_breakdown_csv(path, per_group, formats, key_name):
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow([key_name] + formats + ["totale"])
+        w.writerow([key_name] + formats + ["total"])
         for g, counts in sorted(per_group.items(), key=lambda kv: -sum(kv[1].values())):
             w.writerow([g] + [counts.get(fmt, 0) for fmt in formats] + [sum(counts.values())])
 
@@ -473,38 +473,38 @@ def cache_path(out_dir: str, url: str) -> str:
 
 def probe_asset(url: str, kind_hint: str, out_dir: str, download: bool, quiet: bool) -> dict:
     rec = {
-        "asset_url": url, "tipo": "", "formato": ext_of(url), "mime": "",
-        "larghezza_px": "", "altezza_px": "", "peso_kb": "", "durata_s": "",
-        "is_variant": bool(VARIANT_RE.search(urlparse(url).path)), "note": "",
+        "asset_url": url, "type": "", "format": ext_of(url), "mime": "",
+        "width_px": "", "height_px": "", "weight_kb": "", "duration_s": "",
+        "is_variant": bool(VARIANT_RE.search(urlparse(url).path)), "notes": "",
     }
     prelim = classify(url, "", kind_hint)  # classify by extension/hint, no network
 
     if prelim == "video":
         head = http_head(url)
         rec["mime"] = (head.get("content-type", "").split(";")[0]).strip()
-        rec["tipo"] = classify(url, rec["mime"], kind_hint)
+        rec["type"] = classify(url, rec["mime"], kind_hint)
         clen = head.get("content-length")
         if clen:
-            rec["peso_kb"] = round(int(clen) / 1024, 1)
+            rec["weight_kb"] = round(int(clen) / 1024, 1)
         info = ffprobe_video(url)
         if info:
-            rec["larghezza_px"] = info["width"] or ""
-            rec["altezza_px"] = info["height"] or ""
-            rec["durata_s"] = info["duration"] or ""
+            rec["width_px"] = info["width"] or ""
+            rec["height_px"] = info["height"] or ""
+            rec["duration_s"] = info["duration"] or ""
             if info["codec"]:
-                rec["formato"] = rec["formato"] or info["codec"]
+                rec["format"] = rec["format"] or info["codec"]
         else:
-            rec["note"] = "ffprobe non disponibile o stream non leggibile"
+            rec["notes"] = "ffprobe unavailable or stream unreadable"
         return rec
 
     if not download:
         head = http_head(url)
         rec["mime"] = (head.get("content-type", "").split(";")[0]).strip()
-        rec["tipo"] = classify(url, rec["mime"], kind_hint)
+        rec["type"] = classify(url, rec["mime"], kind_hint)
         clen = head.get("content-length")
         if clen:
-            rec["peso_kb"] = round(int(clen) / 1024, 1)
-        rec["note"] = "no-download: dimensioni px non rilevate"
+            rec["weight_kb"] = round(int(clen) / 1024, 1)
+        rec["notes"] = "no-download: pixel dimensions not detected"
         return rec
 
     # images / svg / other -> single GET (no HEAD): gives weight + dimensions + mime
@@ -516,39 +516,39 @@ def probe_asset(url: str, kind_hint: str, out_dir: str, download: bool, quiet: b
     else:
         status, headers, body = http_get(url)
         if not body:
-            rec["tipo"] = prelim
-            rec["note"] = f"download fallito ({status or headers.get('_error', '?')})"
+            rec["type"] = prelim
+            rec["notes"] = f"download failed ({status or headers.get('_error', '?')})"
             return rec
         rec["mime"] = (headers.get("content-type", "").split(";")[0]).strip()
         os.makedirs(os.path.dirname(cpath), exist_ok=True)
         with open(cpath, "wb") as f:
             f.write(body)
 
-    rec["peso_kb"] = round(len(body) / 1024, 1)
-    rec["tipo"] = classify(url, rec["mime"], kind_hint)
+    rec["weight_kb"] = round(len(body) / 1024, 1)
+    rec["type"] = classify(url, rec["mime"], kind_hint)
 
     dims = None
-    if rec["tipo"] == "svg" or ext_of(url) == "svg":
+    if rec["type"] == "svg" or ext_of(url) == "svg":
         dims = svg_dims(body)
-        rec["tipo"] = "svg"
+        rec["type"] = "svg"
     else:
         dims = sips_dims(cpath) or identify_dims(cpath)
     if dims:
-        rec["larghezza_px"], rec["altezza_px"] = dims[0], dims[1]
+        rec["width_px"], rec["height_px"] = dims[0], dims[1]
         if dims[2]:
-            rec["formato"] = rec["formato"] or dims[2].lower()
-    elif not rec["note"]:
-        rec["note"] = "dimensioni px non rilevate"
+            rec["format"] = rec["format"] or dims[2].lower()
+    elif not rec["notes"]:
+        rec["notes"] = "pixel dimensions not detected"
     return rec
 
 
 # --------------------------------------------------------------------------- #
 # Output
 # --------------------------------------------------------------------------- #
-CSV_FIELDS = ["asset_url", "tipo", "formato", "mime", "larghezza_px", "altezza_px",
-              "aspect_ratio", "orientamento", "peso_kb", "durata_s",
-              "is_variant", "gruppo", "alt", "title",
-              "template_url", "template_cms", "pagine_origine", "note"]
+CSV_FIELDS = ["asset_url", "type", "format", "mime", "width_px", "height_px",
+              "aspect_ratio", "orientation", "weight_kb", "duration_s",
+              "is_variant", "group", "alt", "title",
+              "template_url", "template_cms", "source_pages", "notes"]
 
 
 def write_csv(path: str, records: list[dict]):
@@ -557,8 +557,8 @@ def write_csv(path: str, records: list[dict]):
         w.writeheader()
         for r in records:
             row = {k: r.get(k, "") for k in CSV_FIELDS}
-            if isinstance(row.get("pagine_origine"), (list, set)):
-                row["pagine_origine"] = " | ".join(sorted(row["pagine_origine"]))
+            if isinstance(row.get("source_pages"), (list, set)):
+                row["source_pages"] = " | ".join(sorted(row["source_pages"]))
             w.writerow(row)
 
 
@@ -567,66 +567,66 @@ def write_md(path: str, records: list[dict], target: str, n_pages: int, page_cms
     total_kb = 0.0
     n_img = n_vid = n_novar = 0
     for r in records:
-        fmt = (r.get("formato") or "?").lower()
+        fmt = (r.get("format") or "?").lower()
         by_format[fmt] = by_format.get(fmt, 0) + 1
         try:
-            total_kb += float(r.get("peso_kb") or 0)
+            total_kb += float(r.get("weight_kb") or 0)
         except (TypeError, ValueError):
             pass
-        if r.get("tipo") == "video":
+        if r.get("type") == "video":
             n_vid += 1
-        elif r.get("tipo") in ("image", "svg"):
+        elif r.get("type") in ("image", "svg"):
             n_img += 1
         if not r.get("is_variant"):
             n_novar += 1
 
     per_template, per_template_cms, _per_page, fmts = format_breakdown(records, page_cms)
-    heaviest = sorted(records, key=lambda r: float(r.get("peso_kb") or 0), reverse=True)[:10]
-    missing = [r for r in records if not r.get("larghezza_px") and r.get("tipo") in ("image", "svg")]
+    heaviest = sorted(records, key=lambda r: float(r.get("weight_kb") or 0), reverse=True)[:10]
+    missing = [r for r in records if not r.get("width_px") and r.get("type") in ("image", "svg")]
 
     lines = []
-    lines.append(f"# Inventario media — {target}\n")
-    lines.append(f"- Pagine analizzate: **{n_pages}**")
-    lines.append(f"- Asset totali (unici): **{len(records)}** "
-                 f"({n_img} immagini/SVG, {n_vid} video, {n_novar} non-varianti)")
-    lines.append(f"- Peso totale asset: **{total_kb/1024:.1f} MB**")
-    lines.append("\n## Conteggio per formato\n")
-    lines.append("| Formato | Asset |")
+    lines.append(f"# Media inventory — {target}\n")
+    lines.append(f"- Pages analyzed: **{n_pages}**")
+    lines.append(f"- Total assets (unique): **{len(records)}** "
+                 f"({n_img} images/SVG, {n_vid} videos, {n_novar} non-variant)")
+    lines.append(f"- Total asset weight: **{total_kb/1024:.1f} MB**")
+    lines.append("\n## Count by format\n")
+    lines.append("| Format | Assets |")
     lines.append("|---|---|")
     for fmt, n in sorted(by_format.items(), key=lambda x: -x[1]):
         lines.append(f"| {fmt} | {n} |")
 
     def matrix(title, per_group, label):
         lines.append(f"\n## {title}\n")
-        lines.append(f"| {label} | " + " | ".join(fmts) + " | Totale |")
+        lines.append(f"| {label} | " + " | ".join(fmts) + " | Total |")
         lines.append("|" + "---|" * (len(fmts) + 2))
         for g, counts in sorted(per_group.items(), key=lambda kv: -sum(kv[1].values())):
             row = " | ".join(str(counts.get(f, 0)) for f in fmts)
             lines.append(f"| {g} | {row} | {sum(counts.values())} |")
 
-    matrix("Formati per template (da URL)", per_template, "Template URL")
-    matrix("Formati per template (da CMS / body class)", per_template_cms, "Template CMS")
+    matrix("Formats by template (from URL)", per_template, "Template URL")
+    matrix("Formats by template (from CMS / body class)", per_template_cms, "Template CMS")
 
-    lines.append("\n## Top 10 asset più pesanti\n")
-    lines.append("| Peso (KB) | Tipo | Dimensioni | URL |")
+    lines.append("\n## Top 10 heaviest assets\n")
+    lines.append("| Weight (KB) | Type | Dimensions | URL |")
     lines.append("|---|---|---|---|")
     for r in heaviest:
-        dim = f"{r.get('larghezza_px','?')}×{r.get('altezza_px','?')}"
-        lines.append(f"| {r.get('peso_kb','')} | {r.get('tipo','')} | {dim} | {r['asset_url']} |")
+        dim = f"{r.get('width_px','?')}×{r.get('height_px','?')}"
+        lines.append(f"| {r.get('weight_kb','')} | {r.get('type','')} | {dim} | {r['asset_url']} |")
 
     if missing:
-        lines.append(f"\n## Immagini senza dimensioni rilevate ({len(missing)})\n")
+        lines.append(f"\n## Images without detected dimensions ({len(missing)})\n")
         for r in missing[:30]:
-            lines.append(f"- {r['asset_url']} — {r.get('note','')}")
+            lines.append(f"- {r['asset_url']} — {r.get('notes','')}")
 
-    lines.append("\n## Tutti gli asset\n")
-    lines.append("| Tipo | Formato | Dim (px) | Peso (KB) | Durata | Var | URL |")
+    lines.append("\n## All assets\n")
+    lines.append("| Type | Format | Dim (px) | Weight (KB) | Duration | Var | URL |")
     lines.append("|---|---|---|---|---|---|---|")
-    for r in sorted(records, key=lambda r: (r.get("tipo", ""), -float(r.get("peso_kb") or 0))):
-        dim = f"{r.get('larghezza_px','')}×{r.get('altezza_px','')}".strip("×")
+    for r in sorted(records, key=lambda r: (r.get("type", ""), -float(r.get("weight_kb") or 0))):
+        dim = f"{r.get('width_px','')}×{r.get('height_px','')}".strip("×")
         var = "✓" if r.get("is_variant") else ""
-        lines.append(f"| {r.get('tipo','')} | {r.get('formato','')} | {dim} | "
-                     f"{r.get('peso_kb','')} | {r.get('durata_s','')} | {var} | {r['asset_url']} |")
+        lines.append(f"| {r.get('type','')} | {r.get('format','')} | {dim} | "
+                     f"{r.get('weight_kb','')} | {r.get('duration_s','')} | {var} | {r['asset_url']} |")
 
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -675,7 +675,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     quiet = args.quiet
     _RATE["interval"] = max(60.0 / max(1, args.rpm), args.throttle)
-    log(f"Rate limit: ~{args.rpm} req/min ({_RATE['interval']:.1f}s tra le richieste)", quiet)
+    log(f"Rate limit: ~{args.rpm} req/min ({_RATE['interval']:.1f}s between requests)", quiet)
 
     manifest_path = os.path.join(args.out, ".manifest.json")
     assets: dict[str, dict] = {}   # url -> {kind, pages:set, alt, title}
@@ -691,11 +691,11 @@ def main():
     # 0. Resume from checkpoint (skip page scanning entirely)
     if args.resume and os.path.exists(manifest_path):
         assets, page_cms = load_manifest(manifest_path)
-        log(f"Resume: checkpoint caricato — {len(assets)} asset da {len(page_cms)} pagine, "
-            "salto la fase 1 (riuso anche i download in .cache).", quiet)
+        log(f"Resume: checkpoint loaded — {len(assets)} assets from {len(page_cms)} pages, "
+            "skipping phase 1 (also reusing the downloads in .cache).", quiet)
     else:
         if args.resume:
-            log("Nessun checkpoint trovato: eseguo la scansione completa.", quiet)
+            log("No checkpoint found: running a full scan.", quiet)
         # 1. Determine pages
         if explicit:
             pages = pages_arg
@@ -721,8 +721,8 @@ def main():
                 failed_pages.append(page)
                 log(f"  [{i}/{len(pages)}] FETCH FAILED ({status or headers.get('_error', '?')}): {page}", quiet)
                 if blocked_too_much():
-                    log("\n*** Il server ci sta limitando (429/503 ripetuti). Interrompo la "
-                        "scansione. Riprendi più tardi con --resume (o abbassa --rpm). ***", quiet)
+                    log("\n*** The server is rate-limiting us (repeated 429/503). Stopping the "
+                        "scan. Resume later with --resume (or lower --rpm). ***", quiet)
                     break
                 continue
             if "html" not in ctype:
@@ -741,7 +741,7 @@ def main():
             log(f"  [{i}/{len(pages)}] {page} -> {len(found)} assets (tot {len(assets)})", quiet)
 
         if failed_pages:
-            log(f"\n⚠ {len(failed_pages)} pagine non scaricate.", quiet)
+            log(f"\n⚠ {len(failed_pages)} pages not fetched.", quiet)
         # checkpoint phase 1 so a later block doesn't force a re-scan
         save_manifest(manifest_path, assets, page_cms)
 
@@ -751,31 +751,31 @@ def main():
     records = []
     for j, (url, meta) in enumerate(assets.items(), 1):
         if blocked_too_much():
-            log(f"\n*** Blocco persistente (429/503) durante il probing a {j}/{len(assets)}. "
-                "Interrompo: i download già fatti sono in .cache e la fase 1 nel checkpoint — "
-                "riprendi con --resume. ***", quiet)
+            log(f"\n*** Persistent rate-limit (429/503) during probing at {j}/{len(assets)}. "
+                "Stopping: downloads so far are in .cache and phase 1 in the checkpoint — "
+                "resume with --resume. ***", quiet)
             break
         rec = probe_asset(url, meta["kind"], args.out, not args.no_download, quiet)
-        rec["pagine_origine"] = meta["pages"]
+        rec["source_pages"] = meta["pages"]
         rec["alt"] = meta.get("alt", "")
         rec["title"] = meta.get("title", "")
         # derived fields
         try:
-            w = float(rec.get("larghezza_px") or 0)
-            h = float(rec.get("altezza_px") or 0)
+            w = float(rec.get("width_px") or 0)
+            h = float(rec.get("height_px") or 0)
         except ValueError:
             w = h = 0
         if w and h:
             ratio = w / h
             rec["aspect_ratio"] = round(ratio, 2)
-            rec["orientamento"] = ("quadrata" if 0.95 <= ratio <= 1.05
-                                   else "orizzontale" if ratio > 1 else "verticale")
+            rec["orientation"] = ("square" if 0.95 <= ratio <= 1.05
+                                  else "landscape" if ratio > 1 else "portrait")
         else:
             rec["aspect_ratio"] = ""
-            rec["orientamento"] = ""
+            rec["orientation"] = ""
         fname = urlparse(url).path.rsplit("/", 1)[-1]
         stem = VARIANT_RE.sub("", fname)
-        rec["gruppo"] = re.sub(r"\.\w+$", "", stem)
+        rec["group"] = re.sub(r"\.\w+$", "", stem)
         pgs = meta["pages"]
         rec["template_url"] = ", ".join(sorted({template_of(p) for p in pgs}))
         rec["template_cms"] = ", ".join(sorted({page_cms.get(p, "?") for p in pgs}))
@@ -784,18 +784,18 @@ def main():
             log(f"  probed {j}/{len(assets)}", quiet)
 
     # 4. Write outputs
-    csv_path = os.path.join(args.out, "inventario.csv")
-    md_path = os.path.join(args.out, "inventario.md")
+    csv_path = os.path.join(args.out, "inventory.csv")
+    md_path = os.path.join(args.out, "inventory.md")
     write_csv(csv_path, records)
-    write_md(md_path, records, args.url, len(pages), page_cms)
+    write_md(md_path, records, args.url, len(page_cms) or len(assets), page_cms)
     per_template, per_template_cms, per_page, fmts = format_breakdown(records, page_cms)
-    write_breakdown_csv(os.path.join(args.out, "formati_per_template.csv"), per_template, fmts, "template_url")
-    write_breakdown_csv(os.path.join(args.out, "formati_per_template_cms.csv"), per_template_cms, fmts, "template_cms")
-    write_breakdown_csv(os.path.join(args.out, "formati_per_pagina.csv"), per_page, fmts, "pagina")
+    write_breakdown_csv(os.path.join(args.out, "formats_by_template.csv"), per_template, fmts, "template_url")
+    write_breakdown_csv(os.path.join(args.out, "formats_by_template_cms.csv"), per_template_cms, fmts, "template_cms")
+    write_breakdown_csv(os.path.join(args.out, "formats_by_page.csv"), per_page, fmts, "page")
     log(f"\nDone. {len(records)} assets.", quiet)
     print(f"CSV: {csv_path}")
     print(f"MD:  {md_path}")
-    print(f"Breakdown: {os.path.join(args.out, 'formati_per_template.csv')} (+ _cms, _pagina)")
+    print(f"Breakdown: {os.path.join(args.out, 'formats_by_template.csv')} (+ _cms, _by_page)")
 
 
 if __name__ == "__main__":

@@ -1,38 +1,34 @@
-# Firecrawl fallback (siti JS-only / SPA)
+# Firecrawl fallback (JS-only / SPA sites)
 
-Usa Firecrawl **solo** quando il percorso primario (`curl`/sitemap + passata
-browser) non basta: tipicamente single-page app dove l'HTML statico è un guscio
-vuoto e i media compaiono solo dopo il rendering JS, o quando vuoi una scoperta
-pagine + estrazione più robusta in un colpo solo.
+Use Firecrawl **only** when the primary path (`curl`/sitemap + browser pass)
+isn't enough: typically single-page apps where the static HTML is an empty shell
+and media only appear after JS rendering, or when you want more robust page
+discovery + extraction in one shot.
 
-## Regola tassativa (globale)
-
-NON usare mai il backend **Gemini/Google**. `GOOGLE_API_KEY` / `GEMINI_API_KEY`
-nell'env sono credenziali aziendali. Firecrawl con la sua **`FIRECRAWL_API_KEY`**
-dedicata è ok. Se la chiave non è impostata:
+Firecrawl needs its own **`FIRECRAWL_API_KEY`**. If it isn't set:
 
 ```bash
 echo 'export FIRECRAWL_API_KEY="fc-..."' >> ~/.env && source ~/.env
 ```
 
-## Pattern d'uso
+## Usage pattern
 
-1. **Mappa le pagine** (rendering JS incluso):
+1. **Map the pages** (JS rendering included):
    ```bash
    firecrawl map https://example.com
    ```
-2. **Scrape con HTML renderizzato** di ogni pagina, poi passa l'HTML risultante
-   allo stesso estrattore della pipeline (`extract_assets`) — oppure usa
-   `firecrawl scrape --formats html` e salva l'HTML in una cartella, quindi:
+2. **Scrape with rendered HTML** for each page, then feed that HTML to the same
+   extractor used by the pipeline (`extract_assets`). For example, use
+   `firecrawl scrape --formats html`, save the HTML to a folder, then:
    ```bash
-   python3 scripts/inventory.py --url https://example.com --pages <pagine dal map> --out ./out
+   python3 scripts/inventory.py --url https://example.com --pages <pages from map> --out ./out
    ```
-   (Se preferisci, scrivi gli HTML renderizzati su file e adatta lo script a
-   leggere HTML locali invece di rifare il fetch.)
+   (Alternatively, write the rendered HTML to files and adapt the script to read
+   local HTML instead of re-fetching.)
 
-## Quando NON serve Firecrawl
+## When Firecrawl is NOT needed
 
-- Siti server-rendered (WordPress, la maggior parte dei CMS, marketing site
-  classici): l'HTML statico contiene già i `<img>`. La pipeline `curl` basta.
-- Lazy-load / background CSS: di solito coperti dalla **passata browser** con
-  Chrome DevTools MCP, senza bisogno di Firecrawl.
+- Server-rendered sites (WordPress, most CMSs, classic marketing sites): the
+  static HTML already contains the `<img>` tags. The `curl` pipeline is enough.
+- Lazy-load / CSS background images: usually covered by the **browser pass** with
+  Chrome DevTools MCP, without Firecrawl.

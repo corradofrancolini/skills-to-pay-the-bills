@@ -1,8 +1,8 @@
 project: skills-to-pay-the-bills
-updated: 2026-02-11
+updated: 2026-07-06
 
 stats:
-  - "7 skill templates"
+  - "8 skill templates"
   - "2 command templates"
 
 legend:
@@ -18,6 +18,9 @@ tree:
       - name: "accessibility/"
         desc: "WCAG 2.1/2.2 AA audits"
         tag: quality
+      - name: "claude-to-claude/"
+        desc: "Project ownership handoff + onboarding"
+        tag: process
       - name: "content/"
         desc: "Microcopy and tone of voice"
         tag: content
